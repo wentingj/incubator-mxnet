@@ -1,21 +1,23 @@
 /*!
  * Copyright (c) 2017 by Contributors
- * \file quantized_max_pool.cu
- * \brief
- * \author Ziheng Jiang
+ * \file quantized_pooling.cu
 */
 #include <vector>
-#include "./quantized_max_pool-inl.h"
+#include "./quantized_pooling-inl.h"
 #include "../mshadow_op.h"
 
 namespace mxnet {
 namespace op {
 
 template<typename DType>
-class QuantizedMaxPoolCuDNNOp : public Operator {
+class QuantizedPoolCuDNNOp : public Operator {
  public:
-  explicit QuantizedMaxPoolCuDNNOp(QuantizedMaxPoolParam p) {
+  explicit QuantizedPoolCuDNNOp(QuantizedPoolingParam p) {
     param_ = p;
+    N = 0, H = 2, W = 3, C = 1;
+    format_ = CUDNN_TENSOR_NCHW;
+    // TODO(junwu): Support NHWC in the future
+#if 0
     if (param_.layout == mshadow::kNCHW) {
       N = 0, H = 2, W = 3, C = 1;
       format_ = CUDNN_TENSOR_NCHW;
@@ -23,15 +25,23 @@ class QuantizedMaxPoolCuDNNOp : public Operator {
       N = 0, H = 1, W = 2, C = 3;
       format_ = CUDNN_TENSOR_NHWC;
     }
+#endif
     init_cudnn_ = false;
     alpha_ = 1.0f;
     beta_  = 0.0f;
     dtype_ = CUDNN_DATA_INT8;
-    mode_ = CUDNN_POOLING_MAX;
+    if (param_.pool_type == pool_enum::kMaxPooling) {
+      mode_ = CUDNN_POOLING_MAX;
+    } else if (param_.pool_type == pool_enum::kAvgPooling) {
+      mode_ = CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING;
+    } else {
+      LOG(FATAL) << "Not implemented";
+    }
+
     nan_prop_ = CUDNN_NOT_PROPAGATE_NAN;
   }
 
-  ~QuantizedMaxPoolCuDNNOp() {
+  ~QuantizedPoolCuDNNOp() {
     if (init_cudnn_) {
       CUDNN_CALL(cudnnDestroyTensorDescriptor(in_desc_));
       CUDNN_CALL(cudnnDestroyTensorDescriptor(out_desc_));
@@ -111,15 +121,15 @@ class QuantizedMaxPoolCuDNNOp : public Operator {
                                           oshape[H],
                                           oshape[W]));
     CUDNN_CALL(cudnnSetPooling2dDescriptor(
-      pool_desc_,
-      mode_,
-      nan_prop_,
-      param_.kernel[0],
-      param_.kernel[1],
-      param_.pad[0],
-      param_.pad[1],
-      param_.stride[0],
-      param_.stride[1]));
+        pool_desc_,
+        mode_,
+        nan_prop_,
+        param_.global_pool ? dshape[2] : param_.kernel[0],
+        param_.global_pool ? dshape[3] : param_.kernel[1],
+        param_.pad[0],
+        param_.pad[1],
+        param_.global_pool ? 1 : param_.stride[0],
+        param_.global_pool ? 1 :param_.stride[1]));
   }
   bool init_cudnn_;
   uint32_t N, H, W, C;
@@ -133,13 +143,13 @@ class QuantizedMaxPoolCuDNNOp : public Operator {
   cudnnTensorDescriptor_t out_desc_;
   cudnnPoolingDescriptor_t pool_desc_;
   cudnnNanPropagation_t nan_prop_;
-  QuantizedMaxPoolParam param_;
-};  // class QuantizedMaxPoolCuDNNOp
+  QuantizedPoolingParam param_;
+};  // class QuantizedPoolCuDNNOp
 
 template<>
-Operator *CreateOp<gpu>(QuantizedMaxPoolParam param, int dtype) {
+Operator *CreateOp<gpu>(QuantizedPoolingParam param, int dtype) {
   Operator *op = NULL;
-  op = new QuantizedMaxPoolCuDNNOp<int8_t>(param);
+  op = new QuantizedPoolCuDNNOp<int8_t>(param);
   return op;
 }
 

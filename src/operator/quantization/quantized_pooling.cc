@@ -1,17 +1,16 @@
 /*!
  * Copyright (c) 2017 by Contributors
- * \file quantized_max_pool.cc
- * \brief
- * \author Ziheng Jiang
+ * \file quantized_pooling.cc
 */
 #include <mxnet/op_attr_types.h>
-#include "./quantized_max_pool-inl.h"
+#include "./quantized_pooling-inl.h"
+#include "../pooling-inl.h"
 
 namespace mxnet {
 namespace op {
 
 template<>
-Operator *CreateOp<cpu>(QuantizedMaxPoolParam param, int dtype) {
+Operator *CreateOp<cpu>(QuantizedPoolingParam param, int dtype) {
   Operator *op = NULL;
   LOG(FATAL) << "not implemented";
   // MSHADOW_TYPE_SWITCH(dtype, DType, {
@@ -21,7 +20,7 @@ Operator *CreateOp<cpu>(QuantizedMaxPoolParam param, int dtype) {
 }
 
 // DO_BIND_DISPATCH comes from operator_common.h
-Operator* QuantizedMaxPoolProp::CreateOperatorEx(Context ctx,
+Operator* QuantizedPoolingProp::CreateOperatorEx(Context ctx,
   std::vector<TShape> *in_shape, std::vector<int> *in_type) const {
   std::vector<TShape> out_shape, aux_shape;
   std::vector<int> out_type, aux_type;
@@ -30,9 +29,9 @@ Operator* QuantizedMaxPoolProp::CreateOperatorEx(Context ctx,
   DO_BIND_DISPATCH(CreateOp, param_, (*in_type)[0]);
 }
 
-DMLC_REGISTER_PARAMETER(QuantizedMaxPoolParam);
+DMLC_REGISTER_PARAMETER(QuantizedPoolingParam);
 
-MXNET_REGISTER_OP_PROPERTY(quantized_max_pool, QuantizedMaxPoolProp)
+MXNET_REGISTER_OP_PROPERTY(quantized_pooling, QuantizedPoolingProp)
 .describe(R"code(Performs pooling on the input.
 
 The shapes for 1-D pooling are
@@ -69,15 +68,22 @@ height, width)*.
 .add_argument("data", "NDArray-or-Symbol", "Input data to the pooling operator.")
 .add_argument("min_range", "NDArray-or-Symbol", "")
 .add_argument("max_range", "NDArray-or-Symbol", "")
-.add_arguments(QuantizedMaxPoolParam::__FIELDS__());
+.add_arguments(QuantizedPoolingParam::__FIELDS__());
 
 
-NNVM_REGISTER_OP(max_pool)
+NNVM_REGISTER_OP(Pooling)
 .set_attr<FQuantizedOp>("FQuantizedOp", [](nnvm::NodePtr n) {
     const NodeAttrs& attrs = n->attrs;
+    QuantizedPoolingParam param;
+    param.Init(attrs.dict);
     nnvm::NodePtr node = nnvm::Node::Create();
-    node->attrs.op = Op::Get("quantized_max_pool");
-    node->attrs.name = "quantized_" + attrs.name;
+    if (param.pool_type == pool_enum::kMaxPooling || param.pool_type == pool_enum::kAvgPooling) {
+      node->attrs.op = Op::Get("quantized_pooling");
+      node->attrs.name = "quantized_" + attrs.name;
+    } else {
+      node->attrs.op = Op::Get("Pooling");
+      node->attrs.name = attrs.name;
+    }
     node->attrs.dict = attrs.dict;
     if (node->op()->attr_parser != nullptr) {
       node->op()->attr_parser(&(node->attrs));
