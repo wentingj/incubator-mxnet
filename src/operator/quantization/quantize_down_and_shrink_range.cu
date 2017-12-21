@@ -62,28 +62,18 @@ void QuantizeDownAndShrinkRangeComputeGPU(
   const QuantizeDownAndShrinkRangeParam& param =
     nnvm::get<QuantizeDownAndShrinkRangeParam>(attrs.parsed);
   if (param.min_fval.has_value()) {
-    Kernel<fill, gpu>::Launch(s, 1, actual_min_float.dptr_, param.min_fval.value());
+    Fill(s, actual_min_float, kWriteTo, param.min_fval.value());
   } else {
-    if (param.min_qval.has_value()) {
-      Kernel<fill, gpu>::Launch(s, 1, actual_min_quantized.dptr<SrcDType>(),
-                                param.min_qval.value());
-    } else {
-      Reduce<red::minimum, SrcDType>(ctx, actual_min_quantized, inputs[0], req_cnt++);
-    }
+    Reduce<red::minimum, SrcDType>(ctx, actual_min_quantized, inputs[0], req_cnt++);
     Kernel<QuantizedToFloatStruct, gpu>::Launch(s, 1,
         actual_min_float.dptr_, actual_min_quantized.dptr<SrcDType>(),
         inputs[1].dptr<float>(), inputs[2].dptr<float>());
   }
 
   if (param.max_fval.has_value()) {
-    Kernel<fill, gpu>::Launch(s, 1, actual_max_float.dptr_, param.max_fval.value());
+    Fill(s, actual_max_float, kWriteTo, param.max_fval.value());
   } else {
-    if (param.max_qval.has_value()) {
-      Kernel<fill, gpu>::Launch(s, 1, actual_max_quantized.dptr<SrcDType>(),
-                                param.max_qval.value());
-    } else {
-      Reduce<red::maximum, SrcDType>(ctx, actual_max_quantized, inputs[0], req_cnt++);
-    }
+    Reduce<red::maximum, SrcDType>(ctx, actual_max_quantized, inputs[0], req_cnt++);
     Kernel<QuantizedToFloatStruct, gpu>::Launch(s, 1,
         actual_max_float.dptr_, actual_max_quantized.dptr<SrcDType>(),
         inputs[1].dptr<float>(), inputs[2].dptr<float>());

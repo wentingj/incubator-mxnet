@@ -4,7 +4,6 @@
 */
 #include <mxnet/op_attr_types.h>
 #include "./quantized_pooling-inl.h"
-#include "../pooling-inl.h"
 
 namespace mxnet {
 namespace op {
