@@ -11,7 +11,7 @@
 #include <mxnet/operator_util.h>
 #include "../operator_common.h"
 #include "../nn/pool.h"
-#include "../pooling-inl.h"
+#include "../nn/pooling-inl.h"
 
 namespace mxnet {
 namespace op {
