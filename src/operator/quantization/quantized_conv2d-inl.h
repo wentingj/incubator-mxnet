@@ -190,7 +190,7 @@ class QuantizedConv2DProp : public OperatorProperty {
 
   std::vector<ResourceRequest> ForwardResource(
       const std::vector<TShape> &in_shape) const override {
-    return std::vector<ResourceRequest>(5, ResourceRequest::kTempSpace);
+    return std::vector<ResourceRequest>(1, ResourceRequest::kTempSpace);
   }
 
   Operator* CreateOperator(Context ctx) const override {
