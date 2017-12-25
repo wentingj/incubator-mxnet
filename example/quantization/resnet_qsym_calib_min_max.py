@@ -37,6 +37,7 @@ assert num_calib_batches <= max_num_calib_batches
 num_infer_batches = 500
 num_infer_image_offset = batch_size * max_num_calib_batches
 num_predicted_images = batch_size * num_infer_batches
+num_predicted_images = batch_size * 2
 num_calibrated_images = batch_size * num_calib_batches
 
 data_nthreads = args.data_nthreads
@@ -191,5 +192,8 @@ cqsym = mx.quantization.calibrate_quantized_sym(qsym, quantile_dict, calib_table
 logger.info('Finished calibrating quantized model using FP32 quantiles')
 
 logger.info('Running calibrated quantized model (FP32 calibration table) for inference...')
+mx.profiler.profiler_set_config(mode='all', filename='resnet_qsym_calib_min_max_profile.json')
+mx.profiler.profiler_set_state('run')
 score(cqsym, qarg_params, aux_params, data, devs, label_name, max_num_examples=num_predicted_images)
+mx.profiler.profiler_set_state('stop')
 logger.info('Finished running calibrated quantized model (FP32 calibration table) for inference')
