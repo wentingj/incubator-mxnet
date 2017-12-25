@@ -33,6 +33,7 @@ assert num_calib_batches <= max_num_calib_batches
 num_infer_batches = 500
 num_infer_image_offset = batch_size * max_num_calib_batches
 num_predicted_images = batch_size * num_infer_batches
+num_predicted_images = batch_size * 2
 num_calibrated_images = batch_size * num_calib_batches
 
 data_nthreads = args.data_nthreads
@@ -168,5 +169,8 @@ logger.info('Finished quantizing the parameters of the FP32 model')
 logger.info('Running quantized model (INT8) for inference...')
 # make sure that int8 uncalibrated inference works on the same images as calibrated quantized model
 data = advance_data_iter(data, num_infer_image_offset / batch_size)
+mx.profiler.profiler_set_config(mode='all', filename='resnet_qsym_no_calib_profile.json')
+mx.profiler.profiler_set_state('run')
 score(qsym, qarg_params, aux_params, data, devs, label_name, max_num_examples=num_predicted_images)
+mx.profiler.profiler_set_state('stop')
 logger.info('Finished running quantized model (INT8) for inference')
