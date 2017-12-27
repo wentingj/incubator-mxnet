@@ -51,20 +51,21 @@ class MKLDNNConcForward {
 
  public:
   mkldnn::concat::primitive_desc fwd_pd;
-  
   MKLDNNConcForward(const ConcatParam& param, bool is_train,
                     const std::vector<mkldnn::memory> &in_mem): fwd_pd(
                         GetConcFwdImpl(param, is_train, in_mem)) {
   }
-  void SetNewMem(const std::vector<mkldnn::memory> &in_data, int num_in_data, const mkldnn::memory &out_data) {
+  void SetNewMem(const std::vector<mkldnn::memory> &in_data,
+                 int num_in_data, const mkldnn::memory &out_data) {
     std::vector<mkldnn::primitive::at> data_mem;
-    if (this->data.size() == 0) 
+    if (this->data.size() == 0)
       this->data.resize(num_in_data);
     for (int i =0; i < num_in_data; i++) {
-      if (this->data[i] == nullptr)
+      if (this->data[i] == nullptr) {
         this->data[i] = std::shared_ptr<mkldnn::memory>(new mkldnn::memory(
                            in_data[i].get_primitive_desc(), in_data[i].get_data_handle()));
         data_mem.push_back(mkldnn::primitive::at(*this->data[i]));
+      }
     }
     if (this->out == nullptr)
       this->out = std::shared_ptr<mkldnn::memory>(new mkldnn::memory(
@@ -79,8 +80,8 @@ class MKLDNNConcForward {
 
 typedef MKLDNNParamOpSign<ConcatParam> MKLDNNConcSignature;
 
-static MKLDNNConcForward &GetConcForward(const ConcatParam& param,
-                                       const OpContext &ctx, const std::vector<NDArray> &in_data, const std::vector<mkldnn::memory> &in_mem) {
+static MKLDNNConcForward &GetConcForward(const ConcatParam& param, const OpContext &ctx,
+      const std::vector<NDArray> &in_data, const std::vector<mkldnn::memory> &in_mem) {
   static thread_local std::unordered_map<MKLDNNConcSignature, MKLDNNConcForward, MKLDNNOpHash> fwds;
   MKLDNNConcSignature key(param);
   key.AddSign(ctx.is_train);
