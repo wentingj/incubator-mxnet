@@ -31,16 +31,15 @@ namespace mxnet {
 namespace op {
 
 static mkldnn::concat::primitive_desc GetConcFwdImpl(
-    const ConcatParam& param, bool is_train, const std::vector<NDArray> &in_data) {
+    const ConcatParam& param, bool is_train, const std::vector<mkldnn::memory> &in_data) {
   int num_in_data = param.num_args;
   int concat_dim = param.dim;
   std::vector<mkldnn::memory::primitive_desc> data_md;
   std::vector<mkldnn::primitive::at> data_mem;
   for (int i =0; i < num_in_data; i++) {
-      auto tmp_mem = in_data[i].GetMKLDNNData();
-      auto tmp_pd = tmp_mem->get_primitive_desc();
+      auto tmp_pd = in_data[i].get_primitive_desc();
       data_md.push_back(tmp_pd);
-      data_mem.push_back(*tmp_mem);
+      data_mem.push_back(mkldnn::primitive::at(in_data[i]));
   }
   return mkldnn::concat::primitive_desc(concat_dim, data_md);
 }
@@ -54,8 +53,8 @@ class MKLDNNConcForward {
   mkldnn::concat::primitive_desc fwd_pd;
   
   MKLDNNConcForward(const ConcatParam& param, bool is_train,
-                    const std::vector<NDArray> &in_data): fwd_pd(
-                        GetConcFwdImpl(param, is_train, in_data)) {
+                    const std::vector<mkldnn::memory> &in_mem): fwd_pd(
+                        GetConcFwdImpl(param, is_train, in_mem)) {
   }
   void SetNewMem(const std::vector<mkldnn::memory> &in_data, int num_in_data, const mkldnn::memory &out_data) {
     std::vector<mkldnn::primitive::at> data_mem;
@@ -81,7 +80,7 @@ class MKLDNNConcForward {
 typedef MKLDNNParamOpSign<ConcatParam> MKLDNNConcSignature;
 
 static MKLDNNConcForward &GetConcForward(const ConcatParam& param,
-                                       const OpContext &ctx, const std::vector<NDArray> &in_data) {
+                                       const OpContext &ctx, const std::vector<NDArray> &in_data, const std::vector<mkldnn::memory> &in_mem) {
   static thread_local std::unordered_map<MKLDNNConcSignature, MKLDNNConcForward, MKLDNNOpHash> fwds;
   MKLDNNConcSignature key(param);
   key.AddSign(ctx.is_train);
@@ -91,7 +90,7 @@ static MKLDNNConcForward &GetConcForward(const ConcatParam& param,
 
   auto it = fwds.find(key);
   if (it == fwds.end()) {
-    MKLDNNConcForward fwd(param, ctx.is_train, in_data);
+    MKLDNNConcForward fwd(param, ctx.is_train, in_mem);
     auto ins_ret = fwds.insert(std::pair<MKLDNNConcSignature, MKLDNNConcForward>(
             key, fwd));
     CHECK(ins_ret.second);
@@ -107,13 +106,13 @@ void MKLDNNConcatForward(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
   TmpMemMgr::Get()->Init(ctx.requested[concat_enum::kTempSpace]);
   const ConcatParam& param = nnvm::get<ConcatParam>(attrs.parsed);
   int num_in_data = param.num_args;
-  MKLDNNConcForward &fwd = GetConcForward(param, ctx, in_data);
-  auto out_mem = CreateMKLDNNMem(out_data[concat_enum::kOut],
-      fwd.fwd_pd.dst_primitive_desc(), req[concat_enum::kOut]);
   std::vector<mkldnn::memory> in_mem;
   for (int i =0; i < num_in_data; i++) {
     in_mem.push_back(*(in_data[i].GetMKLDNNData()));
   }
+  MKLDNNConcForward &fwd = GetConcForward(param, ctx, in_data, in_mem);
+  auto out_mem = CreateMKLDNNMem(out_data[concat_enum::kOut],
+      fwd.fwd_pd.dst_primitive_desc(), req[concat_enum::kOut]);
   fwd.SetNewMem(in_mem, num_in_data, *out_mem.second);
   MKLDNNStream *stream = MKLDNNStream::Get();
   stream->RegisterPrim(fwd.GetFwd());
