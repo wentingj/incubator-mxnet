@@ -3,14 +3,12 @@
  * \file quantize.cu
  * \brief
  */
-#include <limits>
-#include "./quantize_down_and_shrink_range-inl.h"
-#include "./quantization_utils.h"
-#include "../tensor/broadcast_reduce_op.h"
+#include "./requantize-inl.h"
 
 namespace mxnet {
 namespace op {
 
+#if 0
 template<typename xpu, typename DType>
 size_t ConfigReduce(mshadow::Stream<xpu>* s,
                     const TShape& data_shape,
@@ -26,7 +24,7 @@ size_t ConfigReduce(mshadow::Stream<xpu>* s,
   return broadcast::ReduceWorkspaceSize<NDim, DType>(s, *dst_shape, kWriteTo, *src_shape);
 }
 
-void QuantizeDownAndShrinkRangeComputeGPU(
+void RequantizeComputeGPU(
     const nnvm::NodeAttrs& attrs,
     const OpContext& ctx,
     const std::vector<TBlob>& inputs,
@@ -37,14 +35,14 @@ void QuantizeDownAndShrinkRangeComputeGPU(
   typedef int32_t SrcDType;
   typedef int8_t  DstDType;
   Stream<gpu> *s = ctx.get_stream<gpu>();
-  const QuantizeDownAndShrinkRangeParam& param =
-    nnvm::get<QuantizeDownAndShrinkRangeParam>(attrs.parsed);
+  const RequantizeParam& param =
+    nnvm::get<RequantizeParam>(attrs.parsed);
 
-  if (param.min_fval.has_value() && param.max_fval.has_value()) {  // model is calibrated
+  if (param.min_range.has_value() && param.max_range.has_value()) {  // model is calibrated
     Kernel<RequantizeManyInNewRangeStruct, gpu>::Launch(s, inputs[0].Size(),
         outputs[0].dptr<DstDType>(), outputs[1].dptr<float>(), outputs[2].dptr<float>(),
         inputs[0].dptr<SrcDType>(), inputs[1].dptr<float>(), inputs[2].dptr<float>(),
-        param.min_fval.value(), param.max_fval.value());
+        param.min_range.value(), param.max_range.value());
   } else { // model is not calibrated
     TShape src_shape, dst_shape;
     const size_t actual_float_size = sizeof(float);
@@ -79,9 +77,10 @@ void QuantizeDownAndShrinkRangeComputeGPU(
         actual_min_float.dptr_, actual_max_float.dptr_);
   }
 }
+#endif
 
-NNVM_REGISTER_OP(quantize_down_and_shrink_range)
-.set_attr<FCompute>("FCompute<gpu>", QuantizeDownAndShrinkRangeComputeGPU);
+NNVM_REGISTER_OP(requantize)
+.set_attr<FCompute>("FCompute<gpu>", RequantizeForward<gpu>);
 
 }  // namespace op
 }  // namespace mxnet

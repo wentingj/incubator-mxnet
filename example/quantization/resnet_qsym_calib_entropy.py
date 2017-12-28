@@ -189,7 +189,7 @@ logger.info('Finished calculating optimal thresholds for quantization')
 
 logger.info('Calibrating quantized model...')
 calib_table_type = 'float32'
-cqsym = mx.quantization.calibrate_quantized_sym(qsym, th_dict, calib_table_type)
+cqsym = mx.quantization.calibrate_quantized_sym(qsym, th_dict)
 cqsym.save('resnet_calib_%d_batches_entropy-symbol.json' % num_calib_batches)
 logger.info('Finished calibrating quantized model')
 

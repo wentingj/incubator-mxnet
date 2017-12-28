@@ -1247,7 +1247,6 @@ MXNET_DLL int MXQuantizeGraph(SymbolHandle sym_handle,
 /*!
  * \brief Set calibration table to node attributes in the sym
  * \param sym_handle symbol whose node attributes are to be set by calibration table
- * \param calib_table_type calibration table data type, either "int32" or "float32"
  * \param num_layers number of layers in the calibration table
  * \param layer names stored as keys in the calibration table
  * \param low_quantiles low quantiles of layers stored in the calibration table
@@ -1255,7 +1254,6 @@ MXNET_DLL int MXQuantizeGraph(SymbolHandle sym_handle,
  * \param ret_sym_handle returned symbol
  */
 MXNET_DLL int MXSetCalibTableToQuantizedGraph(SymbolHandle sym_handle,
-                                              const char* calib_table_type,
                                               const mx_uint num_layers,
                                               const char** layer_names,
                                               const float* low_quantiles,
