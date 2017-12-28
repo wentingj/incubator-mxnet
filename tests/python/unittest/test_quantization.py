@@ -101,13 +101,13 @@ def test_calibrate_quantized_sym():
            == str(int(quantile_dict['quantized_convolution0_output'][1] + 0.5))
 
     quantile_dict = {'convolution0_output': (0.05, 0.95)}
-    cqnet = mx.quantization.calibrate_quantized_sym(qnet, quantile_dict, 'float32')
+    cqnet = mx.quantization.calibrate_quantized_sym(qnet, quantile_dict)
     attr_dict = cqnet.attr_dict()
     assert quantize_down_and_shrink_op_name in attr_dict
-    lhs = float(attr_dict[quantize_down_and_shrink_op_name]['min_fval'])
+    lhs = float(attr_dict[quantize_down_and_shrink_op_name]['min_calib_range'])
     rhs = quantile_dict['convolution0_output'][0]
     assert (lhs - rhs) < 0.0001
-    lhs = float(attr_dict[quantize_down_and_shrink_op_name]['max_fval'])
+    lhs = float(attr_dict[quantize_down_and_shrink_op_name]['max_calib_range'])
     rhs = quantile_dict['convolution0_output'][1]
     assert (lhs - rhs) < 0.0001
 

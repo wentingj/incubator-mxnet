@@ -123,7 +123,7 @@ class LayerOutputQuantileCollector(object):
         self.quantile_dict = {}
 
 
-def calibrate_quantized_sym(qsym, th_dict, calib_table_type='float32'):
+def calibrate_quantized_sym(qsym, th_dict):
     if th_dict is None or len(th_dict) == 0:
         return qsym
     num_layer_outputs = len(th_dict)
@@ -137,7 +137,6 @@ def calibrate_quantized_sym(qsym, th_dict, calib_table_type='float32'):
 
     calibrated_sym = SymbolHandle()
     check_call(_LIB.MXSetCalibTableToQuantizedGraph(qsym.handle,
-                                                    ctypes.c_char_p(calib_table_type),
                                                     mx_uint(num_layer_outputs),
                                                     c_array(ctypes.c_char_p, layer_output_names),
                                                     c_array(ctypes.c_float, low_quantiles),

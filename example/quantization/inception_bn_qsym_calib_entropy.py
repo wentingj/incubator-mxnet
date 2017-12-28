@@ -184,7 +184,7 @@ logger.info('Finished calculating optimal thresholds for quantization')
 
 logger.info('Calibrating quantized model using FP32 outputs...')
 calib_table_type = 'float32'
-cqsym = mx.quantization.calibrate_quantized_sym(qsym, th_dict, calib_table_type)
+cqsym = mx.quantization.calibrate_quantized_sym(qsym, th_dict)
 cqsym.save('inception_bn_calib_%d_batches_entropy.json' % num_calib_batches)
 logger.info('Finished calibrating quantized model using FP32 outputs')
 

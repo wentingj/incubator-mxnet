@@ -178,7 +178,7 @@ logger.info('Finished collecting quantiles from FP32 model outputs...')
 
 logger.info('Calibrating quantized model using FP32 quantiles...')
 calib_table_type = 'float32'
-cqsym = mx.quantization.calibrate_quantized_sym(qsym, quantile_dict, calib_table_type)
+cqsym = mx.quantization.calibrate_quantized_sym(qsym, quantile_dict)
 logger.info('Finished calibrating quantized model using FP32 quantiles')
 
 logger.info('Running calibrated quantized model (FP32 calibration table) for inference...')

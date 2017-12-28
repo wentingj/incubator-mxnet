@@ -603,33 +603,22 @@ int MXQuantizeGraph(SymbolHandle sym_handle,
 }
 
 int MXSetCalibTableToQuantizedGraph(SymbolHandle sym_handle,
-                                    const char* calib_table_type,
                                     const mx_uint num_layers,
                                     const char** layer_names,
-                                    const float* low_quantiles,
-                                    const float* high_quantiles,
+                                    const float* min_ranges,
+                                    const float* max_ranges,
                                     SymbolHandle* ret_sym_handle) {
   nnvm::Symbol* s = new nnvm::Symbol();
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   API_BEGIN();
   nnvm::Symbol* sym = static_cast<nnvm::Symbol*>(sym_handle);
   nnvm::Graph g = Symbol2Graph(*sym);
-  std::string ct_type = calib_table_type;
-  std::string op_name_prefix = "quantized_";
+  const std::string prefix = "quantized_";
   std::unordered_map<std::string, std::pair<float, float>> calib_table;
   for (size_t i = 0; i < num_layers; ++i) {
-    std::string layer_name;
-    if (ct_type == "int32") {
-      layer_name = layer_names[i];
-    } else if (ct_type == "float32") {
-      layer_name = op_name_prefix + layer_names[i];
-    } else {
-      LOG(FATAL) << "Unsupported calib table type: " << ct_type;
-    }
-    calib_table.emplace(layer_name, std::make_pair(low_quantiles[i], high_quantiles[i]));
+    calib_table.emplace(prefix+layer_names[i], std::make_pair(min_ranges[i], max_ranges[i]));
   }
   g.attrs["calib_table"] = std::make_shared<nnvm::any>(std::move(calib_table));
-  g.attrs["calib_table_type"] = std::make_shared<nnvm::any>(std::move(ct_type));
   g = ApplyPass(std::move(g), "SetCalibTableToQuantizedGraph");
   s->outputs = g.outputs;
   *ret_sym_handle = s;
