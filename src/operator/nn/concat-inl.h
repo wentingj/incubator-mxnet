@@ -55,8 +55,8 @@ struct ConcatParam : public dmlc::Parameter<ConcatParam> {
     .describe("the dimension to be concated.");
   }
   bool operator==(const ConcatParam& other) const {
-   return this->num_args == other.num_args &&
-   this->dim == other.dim;
+    return this->num_args == other.num_args &&
+    this->dim == other.dim;
   }
 };  // struct ConcatParam
 

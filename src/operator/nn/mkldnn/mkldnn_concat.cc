@@ -107,6 +107,7 @@ void MKLDNNConcatForward(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
   TmpMemMgr::Get()->Init(ctx.requested[concat_enum::kTempSpace]);
   const ConcatParam& param = nnvm::get<ConcatParam>(attrs.parsed);
   int num_in_data = param.num_args;
+  printf("num_in_data=%d\n", num_in_data);
   std::vector<mkldnn::memory> in_mem;
   for (int i =0; i < num_in_data; i++) {
     in_mem.push_back(*(in_data[i].GetMKLDNNData()));

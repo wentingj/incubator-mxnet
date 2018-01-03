@@ -107,6 +107,11 @@ void MKLDNNActivationBackward(const nnvm::NodeAttrs& attrs, const OpContext &ctx
 void Sum(const mkldnn::memory &arr1, const mkldnn::memory &arr2,
          const mkldnn::memory &out);
 
+/* For quantized convolution. */
+void MKLDNNQuantized_conv2dForward(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
+                                  const std::vector<NDArray> &in_data,
+                                  const std::vector<OpReqType> &req,
+                                  const std::vector<NDArray> &out_data);
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_USE_MKLDNN == 1
