@@ -23,10 +23,11 @@ def benchmark_convolution(data_shape, kernel, num_filter, pad, stride, no_bias=T
     max_data = mx.sym.Variable(name='max_data', shape=(1,), dtype='float32')
     min_weight = mx.sym.Variable(name='min_weight', shape=(1,), dtype='float32')
     max_weight = mx.sym.Variable(name='max_weight', shape=(1,), dtype='float32')
-    quantized_conv2d = mx.sym.quantized_conv2d(data=qdata, weight=weight, min_data=min_data, max_data=max_data,
-                                               min_weight=min_weight, max_weight=max_weight,
-                                               kernel=kernel, num_filter=num_filter, pad=pad, stride=stride,
-                                               no_bias=no_bias, layout=layout, cudnn_off=False, name='quantized_conv2d')
+    quantized_conv2d = mx.sym.contrib.quantized_conv(data=qdata, weight=weight, min_data=min_data, max_data=max_data,
+                                                     min_weight=min_weight, max_weight=max_weight,
+                                                     kernel=kernel, num_filter=num_filter, pad=pad, stride=stride,
+                                                     no_bias=no_bias, layout=layout, cudnn_off=False,
+                                                     name='quantized_conv2d')
     qargs = {qdata.name: mx.quantization.quantize(input_data)[0],
              min_data.name: mx.quantization.quantize(input_data)[1],
              max_data.name: mx.quantization.quantize(input_data)[2],
@@ -39,7 +40,7 @@ def benchmark_convolution(data_shape, kernel, num_filter, pad, stride, no_bias=T
     print('==================================================================================================')
     print('data=%s, kernel=%s, num_filter=%s, pad=%s, stride=%s, no_bias=%s, layout=%s, repeats=%s'
           % (data_shape, kernel, num_filter, pad, stride, no_bias, layout, repeats))
-    print('%s , ctx=%s, time=%.2f ms' % (conv_cudnn.name+'-FP32', ctx_gpu, conv_cudnn_time))
+    print('%s , ctx=%s, time=%.2f ms' % (conv_cudnn.name + '-FP32', ctx_gpu, conv_cudnn_time))
     print('%s, ctx=%s, time=%.2f ms' % (quantized_conv2d.name, ctx_gpu, qconv_time))
     print('quantization speedup:               %.1fX' % (conv_cudnn_time / qconv_time))
     print('\n')
@@ -54,7 +55,7 @@ def benchmark_quantize(ctx, data_shape, repeat=1000):
     for _ in range(repeat):
         out, out_min, out_max = mx.nd.contrib.quantize(data, data_min, data_max, out_type='int8')
     mx.nd.waitall()
-    print('quantize data shape=%s, time cost=%.2f ms' % (data_shape, (time.time()-start) * 1000.0 / repeat))
+    print('quantize data shape=%s, time cost=%.2f ms' % (data_shape, (time.time() - start) * 1000.0 / repeat))
 
 
 if __name__ == '__main__':
