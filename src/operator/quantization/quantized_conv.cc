@@ -9,19 +9,17 @@
 namespace mxnet {
 namespace op {
 
-DMLC_REGISTER_PARAMETER(QuantizedConvParam);
-
 NNVM_REGISTER_OP(_contrib_quantized_conv)
 .set_num_inputs(
   [](const NodeAttrs& attrs) {
-    const QuantizedConvParam& param = nnvm::get<QuantizedConvParam>(attrs.parsed);
+    const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
     return param.no_bias? 6 : 9;
   })
 .set_num_outputs(3)
-.set_attr_parser(ParamParser<QuantizedConvParam>)
+.set_attr_parser(ParamParser<ConvolutionParam>)
 .set_attr<nnvm::FListInputNames>("FListInputNames",
   [](const NodeAttrs& attrs) {
-    const QuantizedConvParam& param = nnvm::get<QuantizedConvParam>(attrs.parsed);
+    const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
     if (param.no_bias) {
       return std::vector<std::string>{"data", "weight", "min_data", "max_data",
                                       "min_weight", "max_weight"};
@@ -50,7 +48,7 @@ NNVM_REGISTER_OP(_contrib_quantized_conv)
 .add_argument("max_weight", "NDArray-or-Symbol", "Maximum value of weight.")
 .add_argument("min_bias", "NDArray-or-Symbol", "Minimum value of bias.")
 .add_argument("max_bias", "NDArray-or-Symbol", "Maximum value of bias.")
-.add_arguments(QuantizedConvParam::__FIELDS__());
+.add_arguments(ConvolutionParam::__FIELDS__());
 
 NNVM_REGISTER_OP(Convolution)
 .set_attr<FQuantizedOp>("FQuantizedOp", [](nnvm::NodePtr n) {

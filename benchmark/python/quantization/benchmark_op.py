@@ -58,6 +58,16 @@ def benchmark_quantize(ctx, data_shape, repeat=1000):
     print('quantize data shape=%s, time cost=%.2f ms' % (data_shape, (time.time() - start) * 1000.0 / repeat))
 
 
+def benchmark_pooling(ctx, data_shape, kernel_shape, repeat=1000):
+    data = mx.nd.ones(data_shape, ctx, 'int8') * 127
+    print(data)
+    data_min = mx.nd.min(data)
+    data_max = mx.nd.max(data)
+    pooled_data, _, _ = mx.nd.quantized_pooling(data, data_min.astype('float32'), data_max.astype('float32'),
+                                                kernel=kernel_shape, pool_type='sum')
+    print(pooled_data)
+
+
 if __name__ == '__main__':
     for batch_size in [32]:
         benchmark_quantize(mx.gpu(0), (batch_size, 3, 244, 244))
