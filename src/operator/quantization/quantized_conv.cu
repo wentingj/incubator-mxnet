@@ -30,31 +30,32 @@ struct QuantizedBiasAddKernel {
 template<typename SrcType, typename DstType, typename CmpType>
 class QuantizedCuDNNConvOp {
  public:
-  explicit QuantizedCuDNNConvOp(const QuantizedConvParam& param,
-                                const std::vector<TShape>& in_shape,
-                                const std::vector<TShape>& out_shape)
-    : param_(param), N(0), H(2), W(3), C(1),
-      src_type_(mshadow::DataType<SrcType>::kCudnnFlag),
-      dst_type_(mshadow::DataType<DstType>::kCudnnFlag),
-      cmp_type_(mshadow::DataType<CmpType>::kCudnnFlag),
-      algo_(CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM),
-      format_(CUDNN_TENSOR_NHWC),
-      init_temp_size_(false) {
+  QuantizedCuDNNConvOp() {
+    CUDNN_CALL(cudnnCreateConvolutionDescriptor(&conv_desc_));
+    CUDNN_CALL(cudnnCreateTensorDescriptor(&data_desc_));
+    CUDNN_CALL(cudnnCreateTensorDescriptor(&out_desc_));
+    CUDNN_CALL(cudnnCreateFilterDescriptor(&filter_desc_));
+  }
+
+  void Init(const QuantizedConvParam& param,
+            const OpContext& ctx,
+            const std::vector<TShape>& in_shape,
+            const std::vector<TShape>& out_shape) {
+    param_ = param;
     CHECK_EQ(param_.kernel.ndim(), 2U) << "QuantizedCuDNNConvOp only supports 2D convolution for now";
     CHECK_EQ(param_.layout, mshadow::kNCHW) << "QuantizedConvOp only supports NCHW for now";
     if (param_.stride.ndim() == 0U) param_.stride = mshadow::Shape2(1, 1);
     if (param_.dilate.ndim() == 0U) param_.dilate = mshadow::Shape2(1, 1);
     if (param_.pad.ndim() == 0U)    param_.pad = mshadow::Shape2(0, 0);
-#if 0
     N = 0, H = 2, W = 3, C = 1;
     src_type_ = mshadow::DataType<SrcType>::kCudnnFlag;
     dst_type_ = mshadow::DataType<DstType>::kCudnnFlag;
     cmp_type_ = mshadow::DataType<CmpType>::kCudnnFlag;
     algo_ = CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM;
     format_ = CUDNN_TENSOR_NHWC;
-    init_temp_size_ = false;
-#endif
+    //init_temp_size_ = false;
     InitDescriptors(in_shape, out_shape);
+    GetTempSize(ctx);
   }
 
   ~QuantizedCuDNNConvOp() {
@@ -74,15 +75,14 @@ class QuantizedCuDNNConvOp {
     Stream<gpu> *s = ctx.get_stream<gpu>();
     CHECK_EQ(s->dnn_handle_ownership_, Stream<gpu>::OwnHandle);
 
-    TBlob data   = in_data[0];
-    TBlob filter = in_data[1];
-    TBlob out    = out_data[0];
+    const TBlob& data   = in_data[0];
+    const TBlob& filter = in_data[1];
+    const TBlob& out    = out_data[0];
     const TShape& dshape = data.shape_;
     const TShape& fshape = filter.shape_;
     const TShape& oshape = out.shape_;
 
     // allocate workspace
-    if (!init_temp_size_) GetTempSize(ctx);
     const int dev_id = ctx.run_ctx.ctx.dev_id;
     const int dev_mask = gpu::kDevMask;
     if (param_.layout == mshadow::kNCHW) {
@@ -168,11 +168,6 @@ class QuantizedCuDNNConvOp {
     const TShape& dshape =  in_shape[0];
     const TShape& kshape =  in_shape[1];
     const TShape& oshape = out_shape[0];
-    CUDNN_CALL(cudnnCreateConvolutionDescriptor(&conv_desc_));
-    CUDNN_CALL(cudnnCreateTensorDescriptor(&data_desc_));
-    CUDNN_CALL(cudnnCreateTensorDescriptor(&out_desc_));
-    CUDNN_CALL(cudnnCreateFilterDescriptor(&filter_desc_));
-
     CUDNN_CALL(cudnnSetConvolution2dDescriptor(conv_desc_,
                                                param_.pad[0],
                                                param_.pad[1],
@@ -207,8 +202,6 @@ class QuantizedCuDNNConvOp {
   }
 
   void GetTempSize(const OpContext& ctx) {
-    CHECK(!init_temp_size_)
-      << "GetTempSize should only be called once.";
     mshadow::Stream<gpu> *s = ctx.get_stream<gpu>();
     CUDNN_CALL(cudnnGetConvolutionForwardWorkspaceSize(s->dnn_handle_,
                                                        data_desc_,
@@ -218,11 +211,9 @@ class QuantizedCuDNNConvOp {
                                                        algo_,
                                                        &workspace_byte_));
     workspace_ = workspace_byte_ / sizeof(SrcType) + 1;
-    init_temp_size_ = true;
   }
 
  private:
-  bool init_temp_size_ = false;
   QuantizedConvParam param_;
   size_t workspace_;
   size_t workspace_byte_;
@@ -251,10 +242,11 @@ void QuantizedConvForward<gpu>(const nnvm::NodeAttrs& attrs,
 #if MXNET_USE_CUDNN == 1
   typedef QuantizedCuDNNConvOp<int8_t, float, int32_t> QuantizedConvOpInt8;
 #if DMLC_CXX11_THREAD_LOCAL
-  static thread_local QuantizedConvOpInt8 op(param, {inputs[0].shape_, inputs[1].shape_}, {outputs[0].shape_});
+  static thread_local QuantizedConvOpInt8 op;
 #else
-  static MX_THREAD_LOCAL QuantizedConvOpInt8 op(param, {inputs[0].shape_, inputs[1].shape_}, {outputs[0].shape_});
+  static MX_THREAD_LOCAL QuantizedConvOpInt8 op;
 #endif  // DMLC_CXX11_THREAD_LOCAL
+  op.Init(param, ctx, {inputs[0].shape_, inputs[1].shape_}, {outputs[0].shape_});
   op.Forward(ctx, inputs, req, outputs);
 #else
   LOG(FATAL) << "QuantizedConvForward<gpu> only supports cudnnConvolutionForward for now";
