@@ -37,13 +37,15 @@ class QuantizedCuDNNConvOp {
     CUDNN_CALL(cudnnCreateFilterDescriptor(&filter_desc_));
   }
 
-  void Init(const QuantizedConvParam& param,
+  void Init(const ConvolutionParam& param,
             const OpContext& ctx,
             const std::vector<TShape>& in_shape,
             const std::vector<TShape>& out_shape) {
     param_ = param;
     CHECK_EQ(param_.kernel.ndim(), 2U) << "QuantizedCuDNNConvOp only supports 2D convolution for now";
-    CHECK_EQ(param_.layout, mshadow::kNCHW) << "QuantizedConvOp only supports NCHW for now";
+    if (param_.layout.has_value()) {
+      CHECK_EQ(param_.layout.value(), mshadow::kNCHW) << "QuantizedConvOp only supports NCHW for now";
+    }
     if (param_.stride.ndim() == 0U) param_.stride = mshadow::Shape2(1, 1);
     if (param_.dilate.ndim() == 0U) param_.dilate = mshadow::Shape2(1, 1);
     if (param_.pad.ndim() == 0U)    param_.pad = mshadow::Shape2(0, 0);
@@ -69,6 +71,7 @@ class QuantizedCuDNNConvOp {
                        const std::vector<TBlob> &in_data,
                        const std::vector<OpReqType> &req,
                        const std::vector<TBlob> &out_data) {
+    CHECK_EQ(param_.kernel.ndim(), 2U) << "QuantizedCuDNNConvOp only supports 2D convolution for now";
     using namespace mshadow;
     CHECK_EQ(in_data.size(), param_.no_bias? 6U : 9U);
     CHECK_EQ(out_data.size(), 3U);
@@ -85,7 +88,7 @@ class QuantizedCuDNNConvOp {
     // allocate workspace
     const int dev_id = ctx.run_ctx.ctx.dev_id;
     const int dev_mask = gpu::kDevMask;
-    if (param_.layout == mshadow::kNCHW) {
+    if (!param_.layout.has_value() || param_.layout.value() == mshadow::kNCHW) {
       const size_t data_size = dshape.Size();
       const size_t weight_size = fshape.Size();
       const size_t output_size = oshape.Size();
@@ -152,8 +155,10 @@ class QuantizedCuDNNConvOp {
        in_data[num_inputs+2].dptr<float>(),  in_data[num_inputs+3].dptr<float>());
 
     if (!param_.no_bias) {
-      CHECK_EQ(param_.layout, mshadow::kNCHW)
-        << "quantized_conv only supports NCHW when there is a bias";
+      if (param_.layout.has_value()) {
+        CHECK_EQ(param_.layout.value(), mshadow::kNCHW)
+          << "quantized_conv only supports NCHW when there is a bias";
+      }
       const TBlob& bias = in_data[2];
       mxnet_op::Kernel<QuantizedBiasAddKernel, gpu>::Launch(s, out.Size(),
           bias.Size(), out.dptr<int32_t>(), bias.dptr<int8_t>(),
@@ -214,7 +219,7 @@ class QuantizedCuDNNConvOp {
   }
 
  private:
-  QuantizedConvParam param_;
+  ConvolutionParam param_;
   size_t workspace_;
   size_t workspace_byte_;
   cudnnDataType_t src_type_;
@@ -237,7 +242,7 @@ void QuantizedConvForward<gpu>(const nnvm::NodeAttrs& attrs,
                                const std::vector<TBlob>& inputs,
                                const std::vector<OpReqType>& req,
                                const std::vector<TBlob>& outputs) {
-  const QuantizedConvParam& param = nnvm::get<QuantizedConvParam>(attrs.parsed);
+  const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
   CHECK_EQ(param.kernel.ndim(), 2U) << "QuantizedConvForward<gpu> only supports 2D convolution for now";
 #if MXNET_USE_CUDNN == 1
   typedef QuantizedCuDNNConvOp<int8_t, float, int32_t> QuantizedConvOpInt8;
