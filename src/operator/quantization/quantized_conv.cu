@@ -4,7 +4,7 @@
  * \brief
  * \author Ziheng Jiang, Jun Wu
 */
-#include "./quantized_conv-inl.h"
+#include "../nn/convolution-inl.h"
 #include "./quantization_utils.h"
 #include "../tensor/matrix_op-inl.h"
 
@@ -236,12 +236,11 @@ class QuantizedCuDNNConvOp {
   float beta_ = 0.0f;
 };  // class QuantizedCuDNNConvOp
 
-template<>
-void QuantizedConvForward<gpu>(const nnvm::NodeAttrs& attrs,
-                               const OpContext& ctx,
-                               const std::vector<TBlob>& inputs,
-                               const std::vector<OpReqType>& req,
-                               const std::vector<TBlob>& outputs) {
+void QuantizedConvForwardGPU(const nnvm::NodeAttrs& attrs,
+                             const OpContext& ctx,
+                             const std::vector<TBlob>& inputs,
+                             const std::vector<OpReqType>& req,
+                             const std::vector<TBlob>& outputs) {
   const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
   CHECK_EQ(param.kernel.ndim(), 2U) << "QuantizedConvForward<gpu> only supports 2D convolution for now";
 #if MXNET_USE_CUDNN == 1
@@ -259,7 +258,7 @@ void QuantizedConvForward<gpu>(const nnvm::NodeAttrs& attrs,
 }
 
 NNVM_REGISTER_OP(_contrib_quantized_conv)
-.set_attr<FCompute>("FCompute<gpu>", QuantizedConvForward<gpu>);
+.set_attr<FCompute>("FCompute<gpu>", QuantizedConvForwardGPU);
 
 }  // namespace op
 }  // namespace mxnet
