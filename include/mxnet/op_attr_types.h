@@ -262,7 +262,8 @@ using FInferStorageType = std::function<bool (const NodeAttrs& attrs,
 
 using FQuantizedOp = std::function<nnvm::NodePtr (nnvm::NodePtr n)>;
 
-using TQuantizationNeedShrink = bool;
+using FNeedRequantize = std::function<bool (const NodeAttrs& attrs)>;
+
 }  // namespace mxnet
 
 #endif  // MXNET_OP_ATTR_TYPES_H_

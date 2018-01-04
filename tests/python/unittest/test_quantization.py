@@ -91,23 +91,18 @@ def test_calibrate_quantized_sym():
     conv = mx.sym.Convolution(data=data, num_filter=1, kernel=(1, 1), no_bias=True)
     qnet = mx.quantization.quantize_graph(conv)
     quantile_dict = {'quantized_convolution0_output': (0.05, 0.95)}
-    cqnet = mx.quantization.calibrate_quantized_sym(qnet, quantile_dict, 'int32')
+    cqnet = mx.quantization.calibrate_quantized_sym(qnet, quantile_dict)
     attr_dict = cqnet.attr_dict()
-    quantize_down_and_shrink_op_name = 'quantize_down_and_shrink_range_convolution0'
-    assert quantize_down_and_shrink_op_name in attr_dict
-    assert attr_dict[quantize_down_and_shrink_op_name]['min_qval']\
-           == str(int(quantile_dict['quantized_convolution0_output'][0] + 0.5))
-    assert attr_dict[quantize_down_and_shrink_op_name]['max_qval']\
-           == str(int(quantile_dict['quantized_convolution0_output'][1] + 0.5))
-
+    print(attr_dict)
+    requantize_op_name = 'requantize_convolution0'
     quantile_dict = {'convolution0_output': (0.05, 0.95)}
     cqnet = mx.quantization.calibrate_quantized_sym(qnet, quantile_dict)
     attr_dict = cqnet.attr_dict()
-    assert quantize_down_and_shrink_op_name in attr_dict
-    lhs = float(attr_dict[quantize_down_and_shrink_op_name]['min_calib_range'])
+    assert requantize_op_name in attr_dict
+    lhs = float(attr_dict[requantize_op_name]['min_calib_range'])
     rhs = quantile_dict['convolution0_output'][0]
     assert (lhs - rhs) < 0.0001
-    lhs = float(attr_dict[quantize_down_and_shrink_op_name]['max_calib_range'])
+    lhs = float(attr_dict[requantize_op_name]['max_calib_range'])
     rhs = quantile_dict['convolution0_output'][1]
     assert (lhs - rhs) < 0.0001
 
