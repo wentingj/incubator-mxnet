@@ -70,7 +70,7 @@ inline bool NeedQuantize(NodePtr node, const std::unordered_set<NodePtr> ignore_
 
 Graph QuantizeGraph(Graph &&src) {
   static auto& quantized_op_map = Op::GetAttr<mxnet::FQuantizedOp>("FQuantizedOp");
-  static auto& need_shrink_map = Op::GetAttr<mxnet::TQuantizationNeedShrink>("TQuantizationNeedShrink");
+  static auto& need_requantize_map = Op::GetAttr<mxnet::FNeedRequantize>("FNeedRequantize");
   auto offline_params = src.GetAttr<std::unordered_set<std::string>>("offline_params");
   auto ignore_nodes = src.GetAttr<std::unordered_set<NodePtr>>("ignore_nodes");
 
@@ -160,17 +160,18 @@ Graph QuantizeGraph(Graph &&src) {
       // TODO(junwu): Here it's assumed that the quantized_op node
       // only produces three outputs: out_data, min_range, and max_range.
       // Confirm with Ziheng.
-      if (need_shrink_map.get(new_node->op(), false)) {
-        NodePtr shrink_node = Node::Create();
-        shrink_node->attrs.op = Op::Get("requantize");
-        shrink_node->attrs.name = "requantize_" + node->attrs.name;
-        if (shrink_node->op()->attr_parser != nullptr) {
-          shrink_node->op()->attr_parser(&(shrink_node->attrs));
+      if (need_requantize_map.count(new_node->op()) > 0
+          && need_requantize_map[new_node->op()](new_node->attrs)) {
+        NodePtr requantize_node = Node::Create();
+        requantize_node->attrs.op = Op::Get("_contrib_requantize");
+        requantize_node->attrs.name = "requantize_" + node->attrs.name;
+        if (requantize_node->op()->attr_parser != nullptr) {
+          requantize_node->op()->attr_parser(&(requantize_node->attrs));
         }
         for (size_t i = 0; i < 3; ++i) {
-          shrink_node->inputs.emplace_back(NodeEntry{new_node, static_cast<uint32_t>(i), 0});
+          requantize_node->inputs.emplace_back(NodeEntry{new_node, static_cast<uint32_t>(i), 0});
         }
-        new_node = shrink_node;
+        new_node = requantize_node;
       }
     } else {
       // If the currently visited node does not need quantization,
@@ -241,20 +242,22 @@ Graph QuantizeGraph(Graph &&src) {
 Graph SetCalibTableToQuantizedGraph(Graph&& g) {
   static const auto& flist_outputs =
     nnvm::Op::GetAttr<nnvm::FListOutputNames>("FListOutputNames");
-  static const auto& need_shrink_map =
-    nnvm::Op::GetAttr<mxnet::TQuantizationNeedShrink>("TQuantizationNeedShrink");
+  static const auto& need_requantize_map =
+    nnvm::Op::GetAttr<mxnet::FNeedRequantize>("FNeedRequantize");
   const auto& calib_table =
     g.GetAttr<std::unordered_map<std::string, std::pair<float, float>>>("calib_table");
   DFSVisit(g.outputs, [&](const NodePtr& node) {
     // If the current op is requantize
     // find the thresholds from the calibration table with the key equal
     // to the current op's input node name, e.g. a quantized_conv2d node.
-    if (node->op() != nullptr && node->op()->name == "requantize") {
+    if (node->op() != nullptr && node->op()->name == "_contrib_requantize") {
       NodePtr quantized_op_node = node->inputs[0].node;
       CHECK(quantized_op_node->op() != nullptr) << quantized_op_node->attrs.name
                                                 << " must be an quantized op node";
-      CHECK(need_shrink_map.count(quantized_op_node->op()) > 0)
-        << quantized_op_node->attrs.name << " op must register TQuantizationNeedShrink attr";
+      CHECK(need_requantize_map.count(quantized_op_node->op()) > 0
+          && need_requantize_map[quantized_op_node->op()](quantized_op_node->attrs))
+          << quantized_op_node->attrs.name << " op must register FNeedRequantize attr"
+                                              " and the attr func should return true";
       std::string out_data_name = quantized_op_node->attrs.name + "_";
       auto list_output_names_func = flist_outputs.get(quantized_op_node->op(), nullptr);
       // TODO(junwu): Here we assume that the quantized_op node

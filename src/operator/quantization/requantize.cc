@@ -10,7 +10,7 @@ namespace mxnet {
 namespace op {
 DMLC_REGISTER_PARAMETER(RequantizeParam);
 
-NNVM_REGISTER_OP(requantize)
+NNVM_REGISTER_OP(_contrib_requantize)
 .describe(R"code(Given data that is quantized in int32 and the corresponding thresholds,
 requantize the data into int8 using min_range and max_range either calculated on the fly
 or from calibration. It's highly recommended to pre-calucate the min_range and max_range

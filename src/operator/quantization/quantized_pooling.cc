@@ -64,6 +64,17 @@ For 3-D pooling, an additional *depth* dimension is added before
 height, width)*.
 
 )code" ADD_FILELINE)
+#if 0
+.set_attr<FNeedRequantize>("FNeedRequantize",
+  [](const NodeAttrs& attrs) {
+    const QuantizedPoolingParam& param = nnvm::get<QuantizedPoolingParam>(attrs.parsed);
+    if (param.pool_type == pool_enum::kMaxPooling || param.pool_type == pool_enum::kAvgPooling) {
+      return false;
+    } else {
+      return true;
+    }
+  })
+#endif
 .add_argument("data", "NDArray-or-Symbol", "Input data to the pooling operator.")
 .add_argument("min_range", "NDArray-or-Symbol", "")
 .add_argument("max_range", "NDArray-or-Symbol", "")
