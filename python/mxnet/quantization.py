@@ -13,19 +13,15 @@ from .io import DataIter
 from .context import cpu
 
 
-def quantize(param):
-    max_range = nd.max(param)
-    min_range = nd.min(param)
-    return nd.contrib.quantize(param, min_range, max_range)
-
-
 def quantize_params(qsym, params):
     inputs_name = qsym.list_arguments()
     quantized_params = {}
     for name in inputs_name:
         if name.endswith(('weight_quantize', 'bias_quantize')):
-            origin_name = name.replace('_quantize', '')
-            val, vmin, vmax = quantize(params[origin_name])
+            original_name = name.replace('_quantize', '')
+            param = params[original_name]
+            val, vmin, vmax = nd.contrib.quantize(data=param, min_range=nd.min(param),
+                                                  max_range=nd.max(param), out_type='int8')
             quantized_params[name] = val
             quantized_params[name+'_min'] = vmin
             quantized_params[name+'_max'] = vmax
@@ -60,8 +56,10 @@ def quantize_symbol(sym, excluded_symbols=None, offline_params=None):
     return Symbol(out)
 
 
-class LayerOutputCollector(object):
-    """Saves layer output NDArray in a dict with layer name as keys and lists of NDArrays as values."""
+class _LayerOutputCollector(object):
+    """Saves layer output NDArray in a dict with layer names as keys and lists of NDArrays as values.
+    The collected NDArrays will be used for calculating the optimal thresholds for quantization using
+    KL divergence."""
     def __init__(self, include_layer=None, logger=None):
         self.nd_dict = {}
         self.include_layer = include_layer
@@ -84,43 +82,32 @@ class LayerOutputCollector(object):
         self.include_layer = None
 
 
-class LayerOutputQuantileCollector(object):
-    def __init__(self, low_quantile=0.05, high_quantlie=0.95, include_layer=None):
-        self.quantile_dict = {}
-        self.low_quantile = low_quantile
-        self.high_quantile = high_quantlie
-        if low_quantile > high_quantlie:
-            raise RuntimeError('Expected low_quantile <= high_quantile in LayerOutputQuantileCollector,'
-                               'while low_quantile = %.2f and hight_quantile = %.2f'
-                               % (low_quantile, high_quantlie))
-        self.include_layer = include_layer
+class _LayerOutputMinMaxCollector(object):
+    """Saves layer output min and max values in a dict with layer names as keys.
+    The collected min and max values will be directly used as thresholds for quantization."""
+    def __init__(self, include_layer=None, logger=None):
+        self._min_max_dict = {}
+        self._include_layer = include_layer
+        self.logger = logger
 
     def collect(self, name, ndarray):
-        if self.include_layer is not None and not self.include_layer(name):
+        if self._include_layer is not None and not self._include_layer(name):
             return
         handle = ctypes.cast(ndarray, NDArrayHandle)
         ndarray = NDArray(handle, writable=False)
-        ndarray_np = ndarray.asnumpy().flatten()
-        length = len(ndarray_np)
-        if self.low_quantile == 0:
-            low_th = np.nanmin(ndarray_np)
+        min_range = nd.min(ndarray).asscalar()
+        max_range = nd.max(ndarray).asscalar()
+        if name in self._min_max_dict:
+            cur_min_max = self._min_max_dict[name]
+            self._min_max_dict[name] = (min(cur_min_max[0], min_range), max(cur_min_max[1], max_range))
         else:
-            low_idx = int(self.low_quantile * length)
-            low_th = np.partition(ndarray_np, low_idx)[low_idx]
-        if self.low_quantile == 1:
-            high_th = np.nanmax(ndarray_np)
-        else:
-            high_idx = int(self.high_quantile * length)
-            if high_idx == length:
-                high_idx = max(length-1, 0)
-            high_th = np.partition(ndarray_np, high_idx)[high_idx]
-        self.quantile_dict[name] = (low_th, high_th)
+            self._min_max_dict[name] = (min_range, max_range)
+        if self.logger is not None:
+            self.logger.info("Collecting layer %s output min_range=%f, max_range=%f" % (name, min_range, max_range))
 
-    def reset(self, low_quantile=0.05, high_quantile=0.95, include_layer=None):
-        self.low_quantile = low_quantile
-        self.high_quantile = high_quantile
-        self.include_layer = include_layer
-        self.quantile_dict = {}
+    @property
+    def min_max_dict(self):
+        return self._min_max_dict
 
 
 def calibrate_quantized_sym(qsym, th_dict):
@@ -145,38 +132,33 @@ def calibrate_quantized_sym(qsym, th_dict):
     return Symbol(calibrated_sym)
 
 
-def collect_layer_output_quantiles(mod, data, collector, max_num_examples=None):
+def collect_layer_output_min_max(mod, data, include_layer=None, max_num_examples=None, logger=None):
+    collector = _LayerOutputMinMaxCollector(include_layer=include_layer, logger=logger)
     mod.set_monitor_callback(collector.collect)
     if isinstance(data, NDArray):
         mod.forward(data_batch=data, is_train=False)
-        return collector.quantile_dict
+        if logger is not None:
+            logger.info("Collected min and max values from NDArray with shape=%s" % str(data.shape))
+        return collector.min_max_dict
     elif isinstance(data, DataIter):
-        quantile_dict = {}
         num_batches = 0
         num_examples = 0
         for batch in data:
             mod.forward(data_batch=batch, is_train=False)
             num_batches += 1
             num_examples += data.batch_size
-            for k, v in collector.quantile_dict.items():
-                if k in quantile_dict:
-                    cur_quantiles = quantile_dict[k]
-                    quantile_dict[k] = (min(cur_quantiles[0], float(v[0])), max(cur_quantiles[1], float(v[1])))
-                else:
-                    quantile_dict[k] = (float(v[0]), float(v[1]))
             if max_num_examples is not None and num_examples >= max_num_examples:
                 break
-
-        if num_batches == 0:
-            raise RuntimeError('No batches fetched from data iter')
-        return quantile_dict
+        if logger is not None:
+            logger.info("Collected min and max from %d batches with batch_size=%d" % (num_batches, data.batch_size))
+        return collector.min_max_dict
     else:
         raise TypeError('collect_layer_output_quantiles only supports input of'
                         ' type NDArray and DataIter, received type=%s' % str(type(data)))
 
 
 def collect_layer_outputs(mod, data, include_layer=None, max_num_examples=None, logger=None):
-    collector = LayerOutputCollector(include_layer=include_layer, logger=logger)
+    collector = _LayerOutputCollector(include_layer=include_layer, logger=logger)
     mod.set_monitor_callback(collector.collect)
     if isinstance(data, NDArray):
         mod.forward(data_batch=data, is_train=False)

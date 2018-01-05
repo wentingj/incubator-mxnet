@@ -165,16 +165,13 @@ logger.info('Finished quantizing the parameters of the FP32 model')
 logger.info('Collecting quantiles from FP32 model outputs using %d batches...' % num_calib_batches)
 include_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
                                                            or name.find('fc') != -1)
-collector = LayerOutputQuantileCollector(low_quantile=low_quantile,
-                                         high_quantlie=high_quantile,
-                                         include_layer=include_layer)
 mod = mx.mod.Module(symbol=sym, context=devs, label_names=[label_name, ])
 mod.bind(for_training=False,
          data_shapes=data.provide_data,
          label_shapes=data.provide_label)
 mod.set_params(arg_params, aux_params)
-quantile_dict = mx.quantization.collect_layer_output_quantiles(mod, data, collector,
-                                                               max_num_examples=num_calibrated_images)
+quantile_dict = mx.quantization.collect_layer_output_min_max(mod, data, include_layer=include_layer,
+                                                             max_num_examples=num_calibrated_images, logger=logger)
 logger.info('Finished collecting quantiles from FP32 model outputs...')
 
 logger.info('Calibrating quantized model using FP32 quantiles...')
