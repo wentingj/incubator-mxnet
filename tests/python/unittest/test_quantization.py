@@ -90,10 +90,6 @@ def test_calibrate_quantized_sym():
     data = mx.sym.Variable('data')
     conv = mx.sym.Convolution(data=data, num_filter=1, kernel=(1, 1), no_bias=True)
     qnet = mx.quantization.quantize_graph(conv)
-    quantile_dict = {'quantized_convolution0_output': (0.05, 0.95)}
-    cqnet = mx.quantization.calibrate_quantized_sym(qnet, quantile_dict)
-    attr_dict = cqnet.attr_dict()
-    print(attr_dict)
     requantize_op_name = 'requantize_convolution0'
     quantile_dict = {'convolution0_output': (0.05, 0.95)}
     cqnet = mx.quantization.calibrate_quantized_sym(qnet, quantile_dict)

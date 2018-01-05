@@ -101,8 +101,7 @@ NNVM_REGISTER_OP(_contrib_quantized_fully_connected)
 .add_arguments(FullyConnectedParam::__FIELDS__());
 
 NNVM_REGISTER_OP(FullyConnected)
-.set_attr<FQuantizedOp>("FQuantizedOp", [](nnvm::NodePtr n) {
-    const nnvm::NodeAttrs& attrs = n->attrs;
+.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
     nnvm::NodePtr node = nnvm::Node::Create();
     node->attrs.op = Op::Get("_contrib_quantized_fully_connected");
     node->attrs.name = "quantized_" + attrs.name;

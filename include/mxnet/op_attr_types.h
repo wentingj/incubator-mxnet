@@ -262,7 +262,7 @@ using FInferStorageType = std::function<bool (const NodeAttrs& attrs,
                                               std::vector<int>* in_attrs,
                                               std::vector<int>* out_attrs)>;
 
-using FQuantizedOp = std::function<nnvm::NodePtr (nnvm::NodePtr n)>;
+using FQuantizedOp = std::function<nnvm::NodePtr (const NodeAttrs& attrs)>;
 
 using FNeedRequantize = std::function<bool (const NodeAttrs& attrs)>;
 
