@@ -9,23 +9,22 @@
 namespace mxnet {
 namespace op {
 
-NNVM_REGISTER_OP(quantized_flatten)
+NNVM_REGISTER_OP(_contrib_quantized_flatten)
 .set_num_inputs(3)
 .set_num_outputs(3)
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizedFlattenShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizedFlattenType)
 .set_attr<FCompute>("FCompute<cpu>", QuantizedFlattenCompute<cpu>)
-.set_attr<nnvm::FGradient>("FGradient", ElemwiseGradUseNone{"_quantize"})
-.add_argument("input", "NDArray-or-Symbol", "A ndarray/symbol of type `float32`")
-.add_argument("min_range", "NDArray-or-Symbol", "The minimum scalar value "
-  "possibly produced for the input")
-.add_argument("max_range", "NDArray-or-Symbol", "The maximum scalar value "
-  "possibly produced for the input");
+.add_argument("data", "NDArray-or-Symbol", "A ndarray/symbol of type `float32`")
+.add_argument("min_data", "NDArray-or-Symbol", "The minimum scalar value "
+  "possibly produced for the data")
+.add_argument("max_data", "NDArray-or-Symbol", "The maximum scalar value "
+  "possibly produced for the data");
 
 NNVM_REGISTER_OP(Flatten)
 .set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
     nnvm::NodePtr node = nnvm::Node::Create();
-    node->attrs.op = Op::Get("quantized_flatten");
+    node->attrs.op = Op::Get("_contrib_quantized_flatten");
     node->attrs.name = "quantized_" + attrs.name;
     node->attrs.dict = attrs.dict;
     if (node->op()->attr_parser != nullptr) {

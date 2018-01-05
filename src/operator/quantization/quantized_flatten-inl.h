@@ -31,10 +31,14 @@ struct quantized_flatten {
 
 template<typename xpu>
 void QuantizedFlattenCompute(const nnvm::NodeAttrs& attrs,
-                     const OpContext& ctx,
-                     const std::vector<TBlob>& inputs,
-                     const std::vector<OpReqType>& req,
-                     const std::vector<TBlob>& outputs) {
+                             const OpContext& ctx,
+                             const std::vector<TBlob>& inputs,
+                             const std::vector<OpReqType>& req,
+                             const std::vector<TBlob>& outputs) {
+  CHECK_EQ(inputs.size(), 3U);
+  CHECK_EQ(outputs.size(), 3U);
+  CHECK_EQ(req.size(), 3U);
+  if (req[0] == kWriteInplace && req[1] == kWriteInplace && req[2] == kWriteInplace) return;
   using namespace mshadow;
   using namespace mxnet_op;
   Stream<xpu> *s = ctx.get_stream<xpu>();
@@ -53,16 +57,15 @@ inline bool QuantizedFlattenShape(const nnvm::NodeAttrs& attrs,
   CHECK_EQ(out_attrs->size(), 3U);
 
   const TShape &dshape = (*in_attrs)[0];
-  CHECK(!shape_is_none(dshape));
+  if (shape_is_none(dshape)) return false;
 
   uint32_t target_dim = 1;
   for (uint32_t i = 1; i < dshape.ndim(); ++i) {
     target_dim *= dshape[i];
   }
 
-  for (size_t i = 1; i < 3; ++i) {
-    CHECK(shape_is_scalar(in_attrs->at(i)));
-  }
+  SHAPE_ASSIGN_CHECK(*in_attrs, 1, TShape{1});
+  SHAPE_ASSIGN_CHECK(*in_attrs, 2, TShape{1});
   SHAPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::Shape2(dshape[0], target_dim));
   SHAPE_ASSIGN_CHECK(*out_attrs, 1, TShape{1});
   SHAPE_ASSIGN_CHECK(*out_attrs, 2, TShape{1});
@@ -74,12 +77,9 @@ inline bool QuantizedFlattenType(const nnvm::NodeAttrs& attrs,
                                  std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), 3U);
   CHECK_EQ(out_attrs->size(), 3U);
-  CHECK_EQ((*in_attrs)[0], mshadow::kInt8)
-    << "`quantize_flatten` only supports int8 input for now";
-  CHECK_EQ((*in_attrs)[1], mshadow::kFloat32)
-    << "the second input of `quantize` should be a tensor with type of float";
-  CHECK_EQ((*in_attrs)[2], mshadow::kFloat32)
-    << "the third input of `quantize` should be a tensor with type of float";
+  TYPE_ASSIGN_CHECK(*in_attrs, 0, mshadow::kInt8);
+  TYPE_ASSIGN_CHECK(*in_attrs, 1, mshadow::kFloat32);
+  TYPE_ASSIGN_CHECK(*in_attrs, 2, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kInt8);
   TYPE_ASSIGN_CHECK(*out_attrs, 1, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*out_attrs, 2, mshadow::kFloat32);

@@ -36,6 +36,7 @@ assert num_calib_batches <= max_num_calib_batches
 num_infer_batches = 500
 num_infer_image_offset = batch_size * max_num_calib_batches
 num_predicted_images = batch_size * num_infer_batches
+num_predicted_images = batch_size * 2
 num_calibrated_images = batch_size * num_calib_batches
 
 data_nthreads = args.data_nthreads
