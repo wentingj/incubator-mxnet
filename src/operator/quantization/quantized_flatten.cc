@@ -23,8 +23,7 @@ NNVM_REGISTER_OP(quantized_flatten)
   "possibly produced for the input");
 
 NNVM_REGISTER_OP(Flatten)
-.set_attr<FQuantizedOp>("FQuantizedOp", [](nnvm::NodePtr n) {
-    const NodeAttrs& attrs = n->attrs;
+.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
     nnvm::NodePtr node = nnvm::Node::Create();
     node->attrs.op = Op::Get("quantized_flatten");
     node->attrs.name = "quantized_" + attrs.name;

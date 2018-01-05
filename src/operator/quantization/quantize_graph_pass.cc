@@ -92,7 +92,7 @@ Graph QuantizeGraph(Graph &&src) {
       // If the currently visited node's op registered
       // FQuantizedOp property, new_node is a quantizated
       // version of a that op, such as quantized_conv2d.
-      new_node = fquantized_op(node);
+      new_node = fquantized_op(node->attrs);
 
       // add data into quantized op input
       for (const auto& e : node->inputs) {
@@ -125,7 +125,7 @@ Graph QuantizeGraph(Graph &&src) {
 
           mirror_map[e.node.get()] = std::move(quantize_node);
         } else {
-          // If the currently visited node needs quantization,
+          // If the entry e's node needs quantization,
           // or mirror_entry is from a quantize op, simply add
           // mirror_entry to the input of the new_node.
           new_node->inputs.emplace_back(mirror_entry);
@@ -155,11 +155,10 @@ Graph QuantizeGraph(Graph &&src) {
         new_node->inputs.emplace_back(NodeEntry{mirror_node, max_index, 0});
       }
 
-      // If the new_node op registered attr TQuantizationNeedShrink,
+      // If the new_node op registered attr FNeedRequantize,
       // insert requantize node after it.
-      // TODO(junwu): Here it's assumed that the quantized_op node
+      // Here it's assumed that the quantized_op node
       // only produces three outputs: out_data, min_range, and max_range.
-      // Confirm with Ziheng.
       if (need_requantize_map.count(new_node->op()) > 0
           && need_requantize_map[new_node->op()](new_node->attrs)) {
         NodePtr requantize_node = Node::Create();
@@ -260,7 +259,7 @@ Graph SetCalibTableToQuantizedGraph(Graph&& g) {
                                               " and the attr func should return true";
       std::string out_data_name = quantized_op_node->attrs.name + "_";
       auto list_output_names_func = flist_outputs.get(quantized_op_node->op(), nullptr);
-      // TODO(junwu): Here we assume that the quantized_op node
+      // Here it's assumed that the quantized_op node
       // only produces three outputs: out_data, min_range, and max_range.
       // So we want to get the pre-calculated min_range and max_range
       // from the calibration table for out_data. Confirm with Ziheng

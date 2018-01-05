@@ -99,20 +99,20 @@ NNVM_REGISTER_OP(_contrib_quantized_pooling)
 .add_arguments(PoolingParam::__FIELDS__());
 
 NNVM_REGISTER_OP(Pooling)
-.set_attr<FQuantizedOp>("FQuantizedOp", [](nnvm::NodePtr n) {
+.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
     PoolingParam param;
-    param.Init(n->attrs.dict);
+    param.Init(attrs.dict);
     // TODO(junwu): Uncomment the following line and remove the above lines after pooling op is refactored
-    //const PoolingParam& param = nnvm::get<PoolingParam>(n->attrs.parsed);
+    //const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
     nnvm::NodePtr node = nnvm::Node::Create();
     if (param.pool_type == pool_enum::kMaxPooling || param.pool_type == pool_enum::kAvgPooling) {
       node->attrs.op = Op::Get("_contrib_quantized_pooling");
-      node->attrs.name = "quantized_" + n->attrs.name;
+      node->attrs.name = "quantized_" + attrs.name;
     } else {
       node->attrs.op = Op::Get("Pooling");
-      node->attrs.name = n->attrs.name;
+      node->attrs.name = attrs.name;
     }
-    node->attrs.dict = n->attrs.dict;
+    node->attrs.dict = attrs.dict;
     if (node->op()->attr_parser != nullptr) {
       node->op()->attr_parser(&(node->attrs));
     }
