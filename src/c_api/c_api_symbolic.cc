@@ -572,25 +572,25 @@ int MXSymbolGrad(SymbolHandle sym, mx_uint num_wrt, const char** wrt, SymbolHand
   API_END();
 }
 
-int MXQuantizeGraph(SymbolHandle sym_handle,
-                    SymbolHandle *ret_sym_handle,
-                    mx_uint num_ignore,
-                    SymbolHandle *ignore_symbols,
-                    mx_uint num_offline,
-                    const char **offline_params) {
+int MXQuantizeSymbol(SymbolHandle sym_handle,
+                     SymbolHandle *ret_sym_handle,
+                     mx_uint num_excluded_symbols,
+                     SymbolHandle *excluded_symbols,
+                     mx_uint num_offline,
+                     const char **offline_params) {
   nnvm::Symbol *s = new nnvm::Symbol();
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   API_BEGIN();
   nnvm::Symbol *sym = static_cast<nnvm::Symbol*>(sym_handle);
   nnvm::Graph g = Symbol2Graph(*sym);
-  std::unordered_set<nnvm::NodePtr> ignore_nodes;
-  for (size_t i = 0; i < num_ignore; ++i) {
-    nnvm::Symbol* sym = static_cast<nnvm::Symbol*>(ignore_symbols[i]);
+  std::unordered_set<nnvm::NodePtr> excluded_nodes;
+  for (size_t i = 0; i < num_excluded_symbols; ++i) {
+    nnvm::Symbol* sym = static_cast<nnvm::Symbol*>(excluded_symbols[i]);
     for (const auto& e : sym->outputs) {
-      ignore_nodes.emplace(e.node);
+      excluded_nodes.emplace(e.node);
     }
   }
-  g.attrs["ignore_nodes"] = std::make_shared<nnvm::any>(std::move(ignore_nodes));
+  g.attrs["excluded_nodes"] = std::make_shared<nnvm::any>(std::move(excluded_nodes));
   std::unordered_set<std::string> offline;
   for (size_t i = 0; i < num_offline; ++i) {
     offline.emplace(offline_params[i]);
@@ -602,16 +602,16 @@ int MXQuantizeGraph(SymbolHandle sym_handle,
   API_END_HANDLE_ERROR(delete s);
 }
 
-int MXSetCalibTableToQuantizedGraph(SymbolHandle sym_handle,
-                                    const mx_uint num_layers,
-                                    const char** layer_names,
-                                    const float* min_ranges,
-                                    const float* max_ranges,
-                                    SymbolHandle* ret_sym_handle) {
+int MXSetCalibTableToQuantizedSymbol(SymbolHandle qsym_handle,
+                                     const mx_uint num_layers,
+                                     const char** layer_names,
+                                     const float* min_ranges,
+                                     const float* max_ranges,
+                                     SymbolHandle* ret_qsym_handle) {
   nnvm::Symbol* s = new nnvm::Symbol();
   MXAPIThreadLocalEntry *ret = MXAPIThreadLocalStore::Get();
   API_BEGIN();
-  nnvm::Symbol* sym = static_cast<nnvm::Symbol*>(sym_handle);
+  nnvm::Symbol* sym = static_cast<nnvm::Symbol*>(qsym_handle);
   nnvm::Graph g = Symbol2Graph(*sym);
   const std::string prefix = "quantized_";
   std::unordered_map<std::string, std::pair<float, float>> calib_table;
@@ -621,6 +621,6 @@ int MXSetCalibTableToQuantizedGraph(SymbolHandle sym_handle,
   g.attrs["calib_table"] = std::make_shared<nnvm::any>(std::move(calib_table));
   g = ApplyPass(std::move(g), "SetCalibTableToQuantizedGraph");
   s->outputs = g.outputs;
-  *ret_sym_handle = s;
+  *ret_qsym_handle = s;
   API_END_HANDLE_ERROR(delete s);
 }

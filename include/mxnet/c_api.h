@@ -1237,12 +1237,12 @@ MXNET_DLL int MXSymbolInferType(SymbolHandle sym,
                                 const int **aux_type_data,
                                 int *complete);
 
-MXNET_DLL int MXQuantizeGraph(SymbolHandle sym_handle,
-                              SymbolHandle *ret_sym_handle,
-                              mx_uint num_ignore,
-                              SymbolHandle *ignore_symbols,
-                              mx_uint num_offline,
-                              const char **offline_params);
+MXNET_DLL int MXQuantizeSymbol(SymbolHandle sym_handle,
+                               SymbolHandle *ret_sym_handle,
+                               mx_uint num_excluded_symbols,
+                               SymbolHandle *excluded_symbols,
+                               mx_uint num_offline,
+                               const char **offline_params);
 
 /*!
  * \brief Set calibration table to node attributes in the sym
@@ -1253,12 +1253,12 @@ MXNET_DLL int MXQuantizeGraph(SymbolHandle sym_handle,
  * \param high_quantiles high quantiles of layers stored in the calibration table
  * \param ret_sym_handle returned symbol
  */
-MXNET_DLL int MXSetCalibTableToQuantizedGraph(SymbolHandle sym_handle,
-                                              const mx_uint num_layers,
-                                              const char** layer_names,
-                                              const float* low_quantiles,
-                                              const float* high_quantiles,
-                                              SymbolHandle* ret_sym_handle);
+MXNET_DLL int MXSetCalibTableToQuantizedSymbol(SymbolHandle qsym_handle,
+                                               const mx_uint num_layers,
+                                               const char** layer_names,
+                                               const float* low_quantiles,
+                                               const float* high_quantiles,
+                                               SymbolHandle* ret_sym_handle);
 
 //--------------------------------------------
 // Part 4: Executor interface

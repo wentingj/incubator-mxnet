@@ -63,16 +63,16 @@ std::vector<NodeEntry> OfflineParams(std::vector<NodeEntry>&& outputs,
   return outputs;
 }
 
-inline bool NeedQuantize(NodePtr node, const std::unordered_set<NodePtr> ignore_nodes) {
+inline bool NeedQuantize(NodePtr node, const std::unordered_set<NodePtr> excluded_nodes) {
   static auto& quantized_op_map = Op::GetAttr<mxnet::FQuantizedOp>("FQuantizedOp");
-  return quantized_op_map.count(node->op()) && !ignore_nodes.count(node);
+  return quantized_op_map.count(node->op()) && !excluded_nodes.count(node);
 }
 
 Graph QuantizeGraph(Graph &&src) {
   static auto& quantized_op_map = Op::GetAttr<mxnet::FQuantizedOp>("FQuantizedOp");
   static auto& need_requantize_map = Op::GetAttr<mxnet::FNeedRequantize>("FNeedRequantize");
   auto offline_params = src.GetAttr<std::unordered_set<std::string>>("offline_params");
-  auto ignore_nodes = src.GetAttr<std::unordered_set<NodePtr>>("ignore_nodes");
+  auto excluded_nodes = src.GetAttr<std::unordered_set<NodePtr>>("excluded_nodes");
 
   // mirror_map stores the mapping from the currently visited graph
   // to the newly created quantized graph. Key is the currently
@@ -87,7 +87,7 @@ Graph QuantizeGraph(Graph &&src) {
     // insert a quantize op node before the current node
     // and replace the current node with the quantized version
     // in the new graph.
-    if (NeedQuantize(node, ignore_nodes)) {
+    if (NeedQuantize(node, excluded_nodes)) {
       auto fquantized_op = quantized_op_map[node->op()];
       // If the currently visited node's op registered
       // FQuantizedOp property, new_node is a quantizated
@@ -107,7 +107,7 @@ Graph QuantizeGraph(Graph &&src) {
         // Save the mapping between e's source node and the newly
         // created quantize op so that the quantize op can be
         // reused next time when the same entry is visited again.
-        if (!NeedQuantize(e.node, ignore_nodes) &&
+        if (!NeedQuantize(e.node, excluded_nodes) &&
             (mirror_node->op() == nullptr ||
              mirror_node->op()->name != "_contrib_quantize")) {
           NodePtr quantize_node = InsertNode("_contrib_quantize",
@@ -191,7 +191,7 @@ Graph QuantizeGraph(Graph &&src) {
         uint32_t max_index = num_outputs + 2 * e.index + 1;
 
         // if input node is quantized operator, add dequantize node
-        if (NeedQuantize(e.node, ignore_nodes)) {
+        if (NeedQuantize(e.node, excluded_nodes)) {
           NodePtr dequantize_node = CreateNode("_contrib_dequantize",
             e.node->attrs.name + "_dequantize");
           dequantize_node->inputs.emplace_back(mirror_entry);
