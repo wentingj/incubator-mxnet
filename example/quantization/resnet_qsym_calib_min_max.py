@@ -173,22 +173,18 @@ logger.info('Collecting quantiles from FP32 model outputs of %d batches...' % nu
 include_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
                                                            or name.find('sc') != -1
                                                            or name.find('fc') != -1)
-collector = LayerOutputQuantileCollector(low_quantile=low_quantile,
-                                         high_quantlie=high_quantile,
-                                         include_layer=include_layer)
 mod = mx.mod.Module(symbol=sym, context=devs, label_names=[label_name, ])
 mod.bind(for_training=False,
          data_shapes=data.provide_data,
          label_shapes=data.provide_label)
 mod.set_params(arg_params, aux_params)
-quantile_dict = mx.quantization.collect_layer_output_quantiles(mod, data, collector,
-                                                               max_num_examples=num_calibrated_images)
+min_max_dict = mx.quantization.collect_layer_output_min_max(mod, data, include_layer=include_layer,
+                                                            max_num_examples=num_calibrated_images, logger=logger)
 data = advance_data_iter(data, max_num_calib_batches-num_calib_batches)
 logger.info('Finished collecting quantiles from FP32 model outputs...')
 
 logger.info('Calibrating quantized model using FP32 quantiles...')
-calib_table_type = 'float32'
-cqsym = mx.quantization.calibrate_quantized_sym(qsym, quantile_dict)
+cqsym = mx.quantization.calibrate_quantized_sym(qsym, min_max_dict)
 logger.info('Finished calibrating quantized model using FP32 quantiles')
 
 logger.info('Running calibrated quantized model (FP32 calibration table) for inference...')

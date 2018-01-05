@@ -15,6 +15,18 @@ NNVM_REGISTER_OP(_contrib_quantized_flatten)
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizedFlattenShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizedFlattenType)
 .set_attr<FCompute>("FCompute<cpu>", QuantizedFlattenCompute<cpu>)
+.set_attr<nnvm::FListInputNames>("FListInputNames",
+  [](const NodeAttrs& attrs) {
+    return std::vector<std::string>{"data", "min_data", "max_data"};
+  })
+.set_attr<nnvm::FListOutputNames>("FListOutputNames",
+  [](const NodeAttrs& attrs) {
+    return std::vector<std::string>{"output", "min_output", "max_output"};
+  })
+.set_attr<nnvm::FInplaceOption>("FInplaceOption",
+  [](const NodeAttrs& attrs){
+    return std::vector<std::pair<int, int> >{{0, 0}, {1, 1}, {2, 2}};
+  })
 .add_argument("data", "NDArray-or-Symbol", "A ndarray/symbol of type `float32`")
 .add_argument("min_data", "NDArray-or-Symbol", "The minimum scalar value "
   "possibly produced for the data")
@@ -32,7 +44,6 @@ NNVM_REGISTER_OP(Flatten)
     }
     return node;
   });
-
 
 }  // namespace op
 }  // namespace mxnet
