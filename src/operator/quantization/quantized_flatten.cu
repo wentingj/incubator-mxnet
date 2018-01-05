@@ -8,7 +8,7 @@
 namespace mxnet {
 namespace op {
 
-NNVM_REGISTER_OP(quantized_flatten)
+NNVM_REGISTER_OP(_contrib_quantized_flatten)
 .set_attr<FCompute>("FCompute<gpu>", QuantizedFlattenCompute<gpu>);
 
 }  // namespace op
