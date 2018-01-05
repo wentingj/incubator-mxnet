@@ -3,155 +3,121 @@
  * \file quantized_pooling.cu
 */
 #include <vector>
-#include "./quantized_pooling-inl.h"
+#include <mxnet/operator_util.h>
+#include "../nn/pooling-inl.h"
 #include "../mshadow_op.h"
 
 namespace mxnet {
 namespace op {
 
 template<typename DType>
-class QuantizedPoolCuDNNOp : public Operator {
+class QuantizedCuDNNPoolingOp {
  public:
-  explicit QuantizedPoolCuDNNOp(QuantizedPoolingParam p) {
-    param_ = p;
-    N = 0, H = 2, W = 3, C = 1;
-    format_ = CUDNN_TENSOR_NCHW;
-    // TODO(junwu): Support NHWC in the future
-#if 0
-    if (param_.layout == mshadow::kNCHW) {
-      N = 0, H = 2, W = 3, C = 1;
-      format_ = CUDNN_TENSOR_NCHW;
-    } else if (param_.layout == mshadow::kNHWC) {
-      N = 0, H = 1, W = 2, C = 3;
-      format_ = CUDNN_TENSOR_NHWC;
-    }
-#endif
-    init_cudnn_ = false;
-    alpha_ = 1.0f;
-    beta_  = 0.0f;
-    dtype_ = CUDNN_DATA_INT8;
-    if (param_.pool_type == pool_enum::kMaxPooling) {
-      mode_ = CUDNN_POOLING_MAX;
-    } else if (param_.pool_type == pool_enum::kAvgPooling) {
-      mode_ = CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING;
-    } else {
-      LOG(FATAL) << "Not implemented";
-    }
-
-    nan_prop_ = CUDNN_NOT_PROPAGATE_NAN;
-  }
-
-  ~QuantizedPoolCuDNNOp() {
-    if (init_cudnn_) {
-      CUDNN_CALL(cudnnDestroyTensorDescriptor(in_desc_));
-      CUDNN_CALL(cudnnDestroyTensorDescriptor(out_desc_));
-      CUDNN_CALL(cudnnDestroyPoolingDescriptor(pool_desc_));
-    }
-  }
-
-  virtual void Forward(const OpContext &ctx,
-                       const std::vector<TBlob> &in_data,
-                       const std::vector<OpReqType> &req,
-                       const std::vector<TBlob> &out_data,
-                       const std::vector<TBlob> &aux_args) {
-    using namespace mshadow;
-    using namespace mshadow::expr;
-    CHECK_EQ(in_data.size(), 3U);
-    CHECK_EQ(out_data.size(), 3U);
-    Stream<gpu> *s = ctx.get_stream<gpu>();
-    CHECK_EQ(s->dnn_handle_ownership_, mshadow::Stream<gpu>::OwnHandle);
-    CHECK(param_.kernel.ndim() == 2) << "Only support 2D pooling";
-    if (!init_cudnn_) this->Init(s, in_data, out_data);
-    CUDNN_CALL(cudnnPoolingForward(s->dnn_handle_,
-                                   pool_desc_,
-                                   &alpha_,
-                                   in_desc_,
-                                   in_data[0].dptr_,
-                                   &beta_,
-                                   out_desc_,
-                                   out_data[0].dptr_));
-
-    Tensor<gpu, 1, float> omin_range = out_data[1].FlatTo1D<gpu, float>(s);
-    Tensor<gpu, 1, float> omax_range = out_data[2].FlatTo1D<gpu, float>(s);
-    ASSIGN_DISPATCH(omin_range, req[1],
-      F<mshadow_op::identity>(in_data[1].FlatTo1D<gpu, float>(s)));
-    ASSIGN_DISPATCH(omax_range, req[2],
-      F<mshadow_op::identity>(in_data[2].FlatTo1D<gpu, float>(s)));
-  }
-
-  virtual void Backward(const OpContext &ctx,
-                        const std::vector<TBlob> &out_grad,
-                        const std::vector<TBlob> &in_data,
-                        const std::vector<TBlob> &out_data,
-                        const std::vector<OpReqType> &req,
-                        const std::vector<TBlob> &in_grad,
-                        const std::vector<TBlob> &aux_args) {
-    LOG(FATAL) << "backward is not supported yet";
-  }
-
- private:
-  inline void Init(mshadow::Stream<gpu> *s,
-                   const std::vector<TBlob> &in_data,
-                   const std::vector<TBlob> &out_data) {
-    using namespace mshadow;
-    CHECK(!init_cudnn_)
-      << "Init should only be called when init_cudnn is false";
-    CHECK_EQ(in_data.size(), 3U);
-    CHECK_EQ(out_data.size(), 3U);
-    CHECK(param_.kernel.ndim() == 2) << "only support 2d pooling";
-    const TBlob& data = in_data[0];
-    const TBlob& out  = out_data[0];
-    TShape dshape = data.shape_;
-    TShape oshape = out.shape_;
+  explicit QuantizedCuDNNPoolingOp() {
     CUDNN_CALL(cudnnCreatePoolingDescriptor(&pool_desc_));
     CUDNN_CALL(cudnnCreateTensorDescriptor(&in_desc_));
     CUDNN_CALL(cudnnCreateTensorDescriptor(&out_desc_));
+  }
+
+  void Init(const PoolingParam& param, const TShape& dshape, const TShape& oshape) {
+    const int N = 0, H = 2, W = 3, C = 1;
+    const cudnnDataType_t dtype = DataType<DType>::kCudnnFlag;
+    CHECK(param.kernel.ndim() == 2) << "Only support 2D pooling";
+    if (param.pool_type == pool_enum::kMaxPooling) {
+      mode_ = CUDNN_POOLING_MAX;
+    } else if (param.pool_type == pool_enum::kAvgPooling) {
+      mode_ = CUDNN_POOLING_AVERAGE_COUNT_INCLUDE_PADDING;
+    } else {
+      LOG(FATAL) << "QuantizedCuDNNPoolingOp only supports pool_type=max/avg";
+    }
     CUDNN_CALL(cudnnSetTensor4dDescriptor(in_desc_,
-                                          format_,
-                                          dtype_,
+                                          CUDNN_TENSOR_NCHW,
+                                          dtype,
                                           dshape[N],
                                           dshape[C],
                                           dshape[H],
                                           dshape[W]));
     CUDNN_CALL(cudnnSetTensor4dDescriptor(out_desc_,
-                                          format_,
-                                          dtype_,
+                                          CUDNN_TENSOR_NCHW,
+                                          dtype,
                                           oshape[N],
                                           oshape[C],
                                           oshape[H],
                                           oshape[W]));
-    CUDNN_CALL(cudnnSetPooling2dDescriptor(
-        pool_desc_,
-        mode_,
-        nan_prop_,
-        param_.global_pool ? dshape[2] : param_.kernel[0],
-        param_.global_pool ? dshape[3] : param_.kernel[1],
-        param_.pad[0],
-        param_.pad[1],
-        param_.global_pool ? 1 : param_.stride[0],
-        param_.global_pool ? 1 :param_.stride[1]));
+    CUDNN_CALL(cudnnSetPooling2dDescriptor(pool_desc_,
+                                           mode_,
+                                           CUDNN_NOT_PROPAGATE_NAN,
+                                           param.global_pool ? dshape[2] : param.kernel[0],
+                                           param.global_pool ? dshape[3] : param.kernel[1],
+                                           param.pad[0],
+                                           param.pad[1],
+                                           param.global_pool ? 1 : param.stride[0],
+                                           param.global_pool ? 1 :param.stride[1]));
   }
-  bool init_cudnn_;
-  uint32_t N, H, W, C;
-  float alpha_;
-  float beta_;
-  cudnnHandle_t handle_;
-  cudnnDataType_t dtype_;
-  cudnnTensorFormat_t format_;
+
+  ~QuantizedCuDNNPoolingOp() {
+    CUDNN_CALL(cudnnDestroyTensorDescriptor(in_desc_));
+    CUDNN_CALL(cudnnDestroyTensorDescriptor(out_desc_));
+    CUDNN_CALL(cudnnDestroyPoolingDescriptor(pool_desc_));
+  }
+
+  virtual void Forward(mshadow::Stream<gpu>* s,
+                       const std::vector<TBlob> &inputs,
+                       const std::vector<OpReqType> &req,
+                       const std::vector<TBlob> &outputs) {
+    CHECK_EQ(inputs.size(), 3U);
+    CHECK_EQ(outputs.size(), 3U);
+    using namespace mshadow;
+    using namespace mshadow::expr;
+    CHECK_EQ(s->dnn_handle_ownership_, mshadow::Stream<gpu>::OwnHandle);
+    float alpha = 1.0f;
+    float beta  = 0.0f;
+    CUDNN_CALL(cudnnPoolingForward(s->dnn_handle_,
+                                   pool_desc_,
+                                   &alpha,
+                                   in_desc_,
+                                   inputs[0].dptr_,
+                                   &beta,
+                                   out_desc_,
+                                   outputs[0].dptr_));
+
+    Tensor<gpu, 1, float> omin_range = outputs[1].FlatTo1D<gpu, float>(s);
+    Tensor<gpu, 1, float> omax_range = outputs[2].FlatTo1D<gpu, float>(s);
+    ASSIGN_DISPATCH(omin_range, req[1],
+      F<mshadow_op::identity>(inputs[1].FlatTo1D<gpu, float>(s)));
+    ASSIGN_DISPATCH(omax_range, req[2],
+      F<mshadow_op::identity>(inputs[2].FlatTo1D<gpu, float>(s)));
+  }
+
+ private:
   cudnnPoolingMode_t mode_;
   cudnnTensorDescriptor_t in_desc_;
   cudnnTensorDescriptor_t out_desc_;
   cudnnPoolingDescriptor_t pool_desc_;
-  cudnnNanPropagation_t nan_prop_;
-  QuantizedPoolingParam param_;
-};  // class QuantizedPoolCuDNNOp
+};  // class QuantizedCuDNNPoolingOp
 
-template<>
-Operator *CreateOp<gpu>(QuantizedPoolingParam param, int dtype) {
-  Operator *op = NULL;
-  op = new QuantizedPoolCuDNNOp<int8_t>(param);
-  return op;
+void QuantizedPoolingForwardGPU(const nnvm::NodeAttrs& attrs,
+                                const OpContext& ctx,
+                                const std::vector<TBlob>& inputs,
+                                const std::vector<OpReqType>& req,
+                                const std::vector<TBlob>& outputs) {
+  const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
+  CHECK_EQ(param.kernel.ndim(), 2U) << "QuantizedPoolingForward<gpu> only supports 2D convolution for now";
+#if MXNET_USE_CUDNN == 1
+#if DMLC_CXX11_THREAD_LOCAL
+  static thread_local QuantizedCuDNNPoolingOp<int8_t> op;
+#else
+  static MX_THREAD_LOCAL QuantizedCuDNNPoolingOp<int8_t> op;
+#endif  // DMLC_CXX11_THREAD_LOCAL
+  op.Init(param, {inputs[0].shape_}, {outputs[0].shape_});
+  op.Forward(ctx.get_stream<gpu>(), inputs, req, outputs);
+#else
+  LOG(FATAL) << "QuantizedPoolingForward<gpu> only supports cudnnPoolingForward for now";
+#endif  // MXNET_USE_CUDNN
 }
+
+NNVM_REGISTER_OP(_contrib_quantized_pooling)
+.set_attr<FCompute>("FCompute<gpu>", QuantizedPoolingForwardGPU);
 
 }  // namespace op
 }  // namespace mxnet
