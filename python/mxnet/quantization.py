@@ -34,14 +34,14 @@ def quantize_params(qsym, params):
     return quantized_params
 
 
-def quantize_graph(sym, ignore_symbols=None, offline_params=None):
-    num_ignore = 0
-    ignore_handles = []
-    if ignore_symbols is not None:
-        assert isinstance(ignore_symbols, list)
-        num_ignore = len(ignore_symbols)
-        for s in ignore_symbols:
-            ignore_handles.append(s.handle)
+def quantize_symbol(sym, excluded_symbols=None, offline_params=None):
+    num_excluded_symbols = 0
+    excluded_handles = []
+    if excluded_symbols is not None:
+        assert isinstance(excluded_symbols, list)
+        num_excluded_symbols = len(excluded_symbols)
+        for s in excluded_symbols:
+            excluded_handles.append(s.handle)
 
     num_offline = 0
     offline = []
@@ -51,12 +51,12 @@ def quantize_graph(sym, ignore_symbols=None, offline_params=None):
             offline.append(c_str(k))
 
     out = SymbolHandle()
-    check_call(_LIB.MXQuantizeGraph(sym.handle,
-                                    ctypes.byref(out),
-                                    mx_uint(num_ignore),
-                                    c_array(SymbolHandle, ignore_handles),
-                                    mx_uint(num_offline),
-                                    c_array(ctypes.c_char_p, offline)))
+    check_call(_LIB.MXQuantizeSymbol(sym.handle,
+                                     ctypes.byref(out),
+                                     mx_uint(num_excluded_symbols),
+                                     c_array(SymbolHandle, excluded_handles),
+                                     mx_uint(num_offline),
+                                     c_array(ctypes.c_char_p, offline)))
     return Symbol(out)
 
 
@@ -136,12 +136,12 @@ def calibrate_quantized_sym(qsym, th_dict):
         high_quantiles.append(v[1])
 
     calibrated_sym = SymbolHandle()
-    check_call(_LIB.MXSetCalibTableToQuantizedGraph(qsym.handle,
-                                                    mx_uint(num_layer_outputs),
-                                                    c_array(ctypes.c_char_p, layer_output_names),
-                                                    c_array(ctypes.c_float, low_quantiles),
-                                                    c_array(ctypes.c_float, high_quantiles),
-                                                    ctypes.byref(calibrated_sym)))
+    check_call(_LIB.MXSetCalibTableToQuantizedSymbol(qsym.handle,
+                                                     mx_uint(num_layer_outputs),
+                                                     c_array(ctypes.c_char_p, layer_output_names),
+                                                     c_array(ctypes.c_float, low_quantiles),
+                                                     c_array(ctypes.c_float, high_quantiles),
+                                                     ctypes.byref(calibrated_sym)))
     return Symbol(calibrated_sym)
 
 

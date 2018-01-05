@@ -153,17 +153,17 @@ def advance_data_iter(data_iter, n):
 
 # cudnn int8 convolution only support channels a multiple of 4
 # have to ignore quantizing conv0 node
-ignore_symbols = []
+excluded_symbols = []
 ignore_sym_names = ['conv0']
 if ignore_last_fc:
     ignore_sym_names.append('fc1')
 for name in ignore_sym_names:
     nodes = sym.get_internals()
     idx = nodes.list_outputs().index(name + '_output')
-    ignore_symbols.append(nodes[idx])
+    excluded_symbols.append(nodes[idx])
 
 logger.info('Quantizing the FP32 model...')
-qsym = quantize_graph(sym, ignore_symbols=ignore_symbols, offline_params=arg_params.keys())
+qsym = quantize_symbol(sym, excluded_symbols=excluded_symbols, offline_params=arg_params.keys())
 logger.info('Finished quantizing the FP32 model')
 
 logger.info('Quantizing parameters of the FP32 model...')
