@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser(description='score a model on a dataset')
 #                    help = 'the model name.')
 parser.add_argument('--gpus', type=str, default='0')
 parser.add_argument('--batch-size', type=int, default=32)
-parser.add_argument('--rgb-mean', type=str, default='0,0,0')
+parser.add_argument('--rgb-mean', type=str, default='123.68,116.779,103.939')
 parser.add_argument('--data-val', type=str, required=True)
 parser.add_argument('--image-shape', type=str, default='3,224,224')
 parser.add_argument('--data-nthreads', type=int, default=4,
