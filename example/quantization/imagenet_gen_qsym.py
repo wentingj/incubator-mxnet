@@ -1,8 +1,6 @@
 import argparse
 from common import modelzoo
 import mxnet as mx
-import os
-import logging
 from mxnet.quantization import *
 
 
@@ -29,8 +27,8 @@ def save_symbol(fname, sym, logger=None):
 def save_params(fname, arg_params, aux_params, logger=None):
     if logger is not None:
         logger.info('Saving params into file at %s' % fname)
-    save_dict = {('arg:%s' % k) : v.as_in_context(cpu()) for k, v in arg_params.items()}
-    save_dict.update({('aux:%s' % k) : v.as_in_context(cpu()) for k, v in aux_params.items()})
+    save_dict = {('arg:%s' % k): v.as_in_context(cpu()) for k, v in arg_params.items()}
+    save_dict.update({('aux:%s' % k): v.as_in_context(cpu()) for k, v in aux_params.items()})
     mx.nd.save(fname, save_dict)
 
 
@@ -61,14 +59,19 @@ if __name__ == '__main__':
                         help='shuffling seed, see'
                              ' https://mxnet.incubator.apache.org/api/python/io/io.html?highlight=imager#mxnet.io.ImageRecordIter'
                              ' for more details')
-    parser.add_argument('--calib-method', type=str, default='entropy',
-                        help='calibration method used for generating calibration table for the quantized symbol; supports'
-                             ' 1. none: no calibration method will be used. The thresholds for quantization will be'
-                             ' calculated on the fly. This will result in runtime penalty and loss of accuracy in general.'
-                             ' 2. naive: simply take min and max values of layer outputs as thresholds for quantization'
+    parser.add_argument('--calib-mode', type=str, default='entropy',
+                        help='calibration mode used for generating calibration table for the quantized symbol; supports'
+                             ' 1. none: no calibration will be used. The thresholds for quantization will be calculated'
+                             ' on the fly. This will result in inference speed slowdown and loss of accuracy'
+                             ' in general.'
+                             ' 2. naive: simply take min and max values of layer outputs as thresholds for'
+                             ' quantization. In general, the inference accuracy worsens with more examples used in'
+                             ' calibration. It is recommended to use `entropy` mode as it produces more accurate'
+                             ' inference results.'
                              ' 3. entropy: calculate KL divergence of the fp32 output and quantized output for optimal'
-                             ' thresholds. This method takes much more time than the naive method, but results more'
-                             ' accurate inference results.')
+                             ' thresholds. This mode is expected to produce the best inference accuracy of all three'
+                             ' kinds of quantized models if the calibration dataset is representative enough of the'
+                             ' inference dataset.')
     args = parser.parse_args()
 
     logging.basicConfig()
@@ -77,11 +80,11 @@ if __name__ == '__main__':
 
     logger.info('shuffle_dataset=%s' % args.shuffle_dataset)
 
-    calib_method = args.calib_method
-    logger.info('calibration method set to %s' % calib_method)
+    calib_mode = args.calib_mode
+    logger.info('calibration mode set to %s' % calib_mode)
 
     # download calibration dataset
-    if calib_method != 'none':
+    if calib_mode != 'none':
         download_calib_dataset('http://data.mxnet.io/data/val_256_q90.rec', args.calib_dataset)
 
     # download model
@@ -94,7 +97,7 @@ if __name__ == '__main__':
 
     # get number of batches for calibration
     num_calib_batches = args.num_calib_batches
-    if calib_method != 'none':
+    if calib_mode != 'none':
         logger.info('number of batches = %d for calibration' % num_calib_batches)
 
     # get number of threads for decoding the dataset
@@ -107,15 +110,15 @@ if __name__ == '__main__':
     excluded_sym_names = []
     if args.model == 'imagenet1k-resnet-152':
         rgb_mean = '0,0,0'
-        include_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
-                                                                   or name.find('sc') != -1
-                                                                   or name.find('fc') != -1)
+        calibrate_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
+                                                                     or name.find('sc') != -1
+                                                                     or name.find('fc') != -1)
         if exclude_first_conv:
             excluded_sym_names = ['conv0']
     elif args.model == 'imagenet1k-inception-bn':
         rgb_mean = '123.68,116.779,103.939'
-        include_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
-                                                                   or name.find('fc') != -1)
+        calibrate_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
+                                                                     or name.find('fc') != -1)
         if exclude_first_conv:
             excluded_sym_names = ['conv_1']
     else:
@@ -131,26 +134,14 @@ if __name__ == '__main__':
     rgb_mean = [float(i) for i in rgb_mean.split(',')]
     mean_args = {'mean_r': rgb_mean[0], 'mean_g': rgb_mean[1], 'mean_b': rgb_mean[2]}
 
-
-    # cudnn int8 convolution only supports #channels as a multiple of 4
-    # have to skip quantizing the first conv layer
-    excluded_symbols = []
-    for name in excluded_sym_names:
-        nodes = sym.get_internals()
-        idx = nodes.list_outputs().index(name + '_output')
-        excluded_symbols.append(nodes[idx])
-
-    logger.info('Quantizing FP32 model %s' % args.model)
-    qsym = quantize_symbol(sym, excluded_symbols=excluded_symbols, offline_params=arg_params.keys())
-    sym_name = '%s-symbol.json' % (prefix + '-quantized')
-    save_symbol(sym_name, qsym, logger)
-
-    logger.info('Quantizing parameters FP32 model %s' % args.model)
-    qarg_params = quantize_params(qsym, arg_params)
-    param_name = '%s-%04d.params' % (prefix + '-quantized', epoch)
-    save_params(param_name, qarg_params, aux_params, logger)
-
-    if calib_method != 'none':
+    if calib_mode == 'none':
+        logger.info('Quantizing FP32 model %s' % args.model)
+        qsym, qarg_params, aux_params = get_quantized_model(ctx=mx.gpu(0), sym=sym, params=(arg_params, aux_params),
+                                                            calib_mode=calib_mode,
+                                                            excluded_sym_names=excluded_sym_names)
+        sym_name = '%s-symbol.json' % (prefix + '-quantized')
+        save_symbol(sym_name, qsym, logger)
+    else:
         logger.info('Creating ImageRecordIter for reading calibration dataset')
         data = mx.io.ImageRecordIter(path_imgrec=args.calib_dataset,
                                      label_width=1,
@@ -165,28 +156,20 @@ if __name__ == '__main__':
                                      seed=args.shuffle_seed,
                                      **mean_args)
 
-        mod = mx.mod.Module(symbol=sym, context=mx.gpu(0), label_names=[label_name, ])
-        mod.bind(for_training=False, data_shapes=data.provide_data, label_shapes=data.provide_label)
-        mod.set_params(arg_params, aux_params)
-        num_calib_images = num_calib_batches * batch_size
-
-        if calib_method == 'entropy':
-            logger.info('Collecting layer outputs from FP32 model using %d batches' % num_calib_batches)
-            nd_dict = collect_layer_outputs(mod, data, include_layer=include_layer, max_num_examples=num_calib_images,
-                                            logger=logger)
-            logger.info('Calculating optimal thresholds for quantization')
-            th_dict = mx.quantization.get_optimal_thresholds(nd_dict, logger=logger)
+        cqsym, qarg_params, aux_params = get_quantized_model(ctx=mx.gpu(0), sym=sym, params=(arg_params, aux_params),
+                                                             calib_data=data, calib_mode=calib_mode,
+                                                             excluded_sym_names=excluded_sym_names,
+                                                             num_calib_examples=num_calib_batches * batch_size,
+                                                             calibrate_layer=calibrate_layer)
+        if calib_mode == 'entropy':
             suffix = '-quantized-%dbatches-entropy' % num_calib_batches
-        elif calib_method == 'naive':
-            logger.info('Collecting layer output min/max values from FP32 model using %d batches' % num_calib_batches)
-            th_dict = mx.quantization.collect_layer_output_min_max(mod, data, include_layer=include_layer,
-                                                                   max_num_examples=num_calib_images,
-                                                                   logger=logger)
+        elif calib_mode == 'naive':
             suffix = '-quantized-%dbatches-naive' % num_calib_batches
         else:
-            raise ValueError('unknow calibration method %s entered' % calib_method)
-
-        logger.info('Calibrating quantized model...')
-        cqsym = mx.quantization.calibrate_quantized_sym(qsym, th_dict)
+            raise ValueError('unknow calibration mode %s received, only supports `none`, `naive`, and `entropy`'
+                             % calib_mode)
         sym_name = '%s-symbol.json' % (prefix + suffix)
         save_symbol(sym_name, cqsym, logger)
+
+    param_name = '%s-%04d.params' % (prefix + '-quantized', epoch)
+    save_params(param_name, qarg_params, aux_params, logger)

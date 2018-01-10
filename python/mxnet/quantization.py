@@ -3,17 +3,24 @@ from __future__ import absolute_import
 from scipy import stats
 import numpy as np
 import ctypes
+import logging
+import os
 from .base import _LIB, check_call
 from .base import c_array, c_str, mx_uint
 from .base import NDArrayHandle, SymbolHandle
-from .symbol import Symbol
+from .symbol import Symbol, load
 from . import ndarray as nd
 from .ndarray import NDArray
 from .io import DataIter
-from .context import cpu
+from .context import cpu, Context
+from .module import Module
 
 
-def quantize_params(qsym, params):
+def _quantize_params(qsym, params):
+    """Given a quantized symbol and a dict of params that have not been quantized, generate quantized params.
+    Currently only supports quantizing the arg_params with names of `weight` or `bias`, not aux_params.
+    If `qsym` contains symbols that are excluded from being quantized, their corresponding params will
+    not be quantized, but saved together with quantized params of the symbols that have been quantized."""
     inputs_name = qsym.list_arguments()
     quantized_params = {}
     for name in inputs_name:
@@ -30,7 +37,7 @@ def quantize_params(qsym, params):
     return quantized_params
 
 
-def quantize_symbol(sym, excluded_symbols=None, offline_params=None):
+def _quantize_symbol(sym, excluded_symbols=None, offline_params=None):
     num_excluded_symbols = 0
     excluded_handles = []
     if excluded_symbols is not None:
@@ -77,40 +84,32 @@ class _LayerOutputCollector(object):
         else:
             self.nd_dict[name] = [ndarray]
 
-    def reset(self):
-        self.nd_dict = {}
-        self.include_layer = None
-
 
 class _LayerOutputMinMaxCollector(object):
     """Saves layer output min and max values in a dict with layer names as keys.
     The collected min and max values will be directly used as thresholds for quantization."""
     def __init__(self, include_layer=None, logger=None):
-        self._min_max_dict = {}
-        self._include_layer = include_layer
+        self.min_max_dict = {}
+        self.include_layer = include_layer
         self.logger = logger
 
     def collect(self, name, ndarray):
-        if self._include_layer is not None and not self._include_layer(name):
+        if self.include_layer is not None and not self.include_layer(name):
             return
         handle = ctypes.cast(ndarray, NDArrayHandle)
         ndarray = NDArray(handle, writable=False)
         min_range = nd.min(ndarray).asscalar()
         max_range = nd.max(ndarray).asscalar()
-        if name in self._min_max_dict:
-            cur_min_max = self._min_max_dict[name]
-            self._min_max_dict[name] = (min(cur_min_max[0], min_range), max(cur_min_max[1], max_range))
+        if name in self.min_max_dict:
+            cur_min_max = self.min_max_dict[name]
+            self.min_max_dict[name] = (min(cur_min_max[0], min_range), max(cur_min_max[1], max_range))
         else:
-            self._min_max_dict[name] = (min_range, max_range)
+            self.min_max_dict[name] = (min_range, max_range)
         if self.logger is not None:
             self.logger.info("Collecting layer %s output min_range=%f, max_range=%f" % (name, min_range, max_range))
 
-    @property
-    def min_max_dict(self):
-        return self._min_max_dict
 
-
-def calibrate_quantized_sym(qsym, th_dict):
+def _calibrate_quantized_sym(qsym, th_dict):
     if th_dict is None or len(th_dict) == 0:
         return qsym
     num_layer_outputs = len(th_dict)
@@ -132,56 +131,39 @@ def calibrate_quantized_sym(qsym, th_dict):
     return Symbol(calibrated_sym)
 
 
-def collect_layer_output_min_max(mod, data, include_layer=None, max_num_examples=None, logger=None):
+def _collect_layer_statistics(mod, data, collector, max_num_examples=None, logger=None):
+    if not isinstance(data, DataIter):
+        raise ValueError('Only supports data as a type of DataIter, while received type %s' % str(type(data)))
+    mod.set_monitor_callback(collector.collect)
+    num_batches = 0
+    num_examples = 0
+    for batch in data:
+        mod.forward(data_batch=batch, is_train=False)
+        num_batches += 1
+        num_examples += data.batch_size
+        if max_num_examples is not None and num_examples >= max_num_examples:
+            break
+    if logger is not None:
+        logger.info("Collected statistics from %d batches with batch_size=%d" % (num_batches, data.batch_size))
+
+
+def _collect_layer_output_min_max(mod, data, include_layer=None, max_num_examples=None, logger=None):
     collector = _LayerOutputMinMaxCollector(include_layer=include_layer, logger=logger)
-    mod.set_monitor_callback(collector.collect)
-    if isinstance(data, NDArray):
-        mod.forward(data_batch=data, is_train=False)
-        if logger is not None:
-            logger.info("Collected min and max values from NDArray with shape=%s" % str(data.shape))
-        return collector.min_max_dict
-    elif isinstance(data, DataIter):
-        num_batches = 0
-        num_examples = 0
-        for batch in data:
-            mod.forward(data_batch=batch, is_train=False)
-            num_batches += 1
-            num_examples += data.batch_size
-            if max_num_examples is not None and num_examples >= max_num_examples:
-                break
-        if logger is not None:
-            logger.info("Collected min and max from %d batches with batch_size=%d" % (num_batches, data.batch_size))
-        return collector.min_max_dict
-    else:
-        raise TypeError('collect_layer_output_quantiles only supports input of'
-                        ' type NDArray and DataIter, received type=%s' % str(type(data)))
+    _collect_layer_statistics(mod, data, collector, max_num_examples, logger)
+    return collector.min_max_dict
 
 
-def collect_layer_outputs(mod, data, include_layer=None, max_num_examples=None, logger=None):
+def _collect_layer_outputs(mod, data, include_layer=None, max_num_examples=None, logger=None):
     collector = _LayerOutputCollector(include_layer=include_layer, logger=logger)
-    mod.set_monitor_callback(collector.collect)
-    if isinstance(data, NDArray):
-        mod.forward(data_batch=data, is_train=False)
-        return collector.nd_dict
-    elif isinstance(data, DataIter):
-        num_examples = 0
-        for batch in data:
-            mod.forward(data_batch=batch, is_train=False)
-            num_examples += data.batch_size
-            if max_num_examples is not None and num_examples >= max_num_examples:
-                break
-        if num_examples == 0:
-            raise RuntimeError('No examples fetched from data iter')
-        return collector.nd_dict
-    else:
-        raise TypeError('collect_layer_output only supports input of type NDArray and DataIter, received type=%s'
-                        % str(type(data)))
+    _collect_layer_statistics(mod, data, collector, max_num_examples, logger)
+    return collector.nd_dict
 
 
 def _smooth_distribution(p, eps=0.0001):
     """Given a discrete distribution (might not have been normalized to 1),
     smooth it by replacing zeros with eps and taking the corresponding amount
-    off the non-zero values."""
+    off the non-zero values.
+    Ref: http://web.engr.illinois.edu/~hanj/cs412/bk3/KL-divergence.pdf"""
     is_zeros = (p == 0).astype(np.float32)
     is_nonzeros = (p != 0).astype(np.float32)
     n_zeros = is_zeros.sum()
@@ -276,7 +258,7 @@ def _get_optimal_threshold(arr, num_bins=8001, num_quantized_bins=255):
     return min_val, max_val, min_divergence, opt_th
 
 
-def get_optimal_thresholds(nd_dict, num_bins=8001, num_quantized_bins=255, logger=None):
+def _get_optimal_thresholds(nd_dict, num_bins=8001, num_quantized_bins=255, logger=None):
     """Given a ndarray dict, find the optimal threshold for quantizing each value of the key."""
     assert isinstance(nd_dict, dict)
     if logger is not None:
@@ -291,3 +273,96 @@ def get_optimal_thresholds(nd_dict, num_bins=8001, num_quantized_bins=255, logge
             logger.info('layer=%s, min_val=%f, max_val=%f, min_divergence=%f, optimal_threshold=%f'
                         % (k, min_val, max_val, min_divergence, opt_th))
     return th_dict
+
+
+def _load_sym(sym, logger=logging):
+    if isinstance(sym, str):  # sym is a symbol file path
+        cur_path = os.path.dirname(os.path.realpath(__file__))
+        symbol_file_path = os.path.join(cur_path, sym)
+        logger.info('Loading symbol from file %s' % symbol_file_path)
+        return load(symbol_file_path)
+    elif isinstance(sym, Symbol):
+        return sym
+    else:
+        raise ValueError('_load_sym only accepts Symbol or path to the symbol file,'
+                         ' while received type %s' % str(type(sym)))
+
+
+def _load_params(params, logger=logging):
+    if isinstance(params, str):
+        cur_path = os.path.dirname(os.path.realpath(__file__))
+        param_file_path = os.path.join(cur_path, params)
+        logger.info('Loading params from file %s' % param_file_path)
+        save_dict = nd.load(param_file_path)
+        arg_params = {}
+        aux_params = {}
+        for k, v in save_dict.items():
+            tp, name = k.split(':', 1)
+            if tp == 'arg':
+                arg_params[name] = v
+            if tp == 'aux':
+                aux_params[name] = v
+        return arg_params, aux_params
+    elif isinstance(params, (tuple, list)) and len(params) == 2:
+        return params[0], params[1]
+    else:
+        raise ValueError('Unsupported params provided. Must be either a path to the param file or'
+                         ' a pair of dictionaries representing arg_params and aux_params')
+
+
+def get_quantized_model(ctx, sym, params, calib_data=None, calib_mode='entropy',
+                        excluded_sym_names=None, num_calib_examples=320,
+                        calibrate_layer=None, label_name='softmax_label', logger=logging):
+    """User-level API for generating a quantized model from a FP32 model w/ or w/o calibration."""
+    if not isinstance(ctx, Context):
+        raise ValueError('generate_quantized_model currently only supports single ctx, while received %s' % str(ctx))
+    if calib_mode is None:
+        calib_mode = 'none'
+    sym = _load_sym(sym, logger)
+    arg_params, aux_params = _load_params(params, logger)
+
+    if excluded_sym_names is None:
+        excluded_sym_names = []
+    if not isinstance(excluded_sym_names, list):
+        raise ValueError('excluded_sym_names must be a list of strings representing the names of the symbols'
+                         ' that will not be quantized, while received type %s' % str(type(excluded_sym_names)))
+    excluded_syms = []
+    if excluded_sym_names is not None:
+        for sym_name in excluded_sym_names:
+            nodes = sym.get_internals()
+            idx = nodes.list_outputs().index(sym_name + '_output')
+            excluded_syms.append(nodes[idx])
+    logger.info('Quantizing symbol')
+    qsym = _quantize_symbol(sym, excluded_symbols=excluded_syms, offline_params=arg_params.keys())
+
+    logger.info('Quantizing parameters')
+    qarg_params = _quantize_params(qsym, arg_params)
+
+    if calib_mode != 'none':
+        if calib_data is None:
+            raise ValueError('calib_data must be provided with calib_mode=%s' % calib_mode)
+        if not isinstance(calib_data, DataIter):
+            raise ValueError('calib_data must be of DataIter type when calib_mode=%s,'
+                             ' while received type %s' % (calib_mode, str(type(calib_data))))
+        if calibrate_layer is None:
+            calibrate_layer = lambda name: name.endswith('_output')
+
+        mod = Module(symbol=sym, context=ctx, label_names=[label_name,])
+        mod.bind(for_training=False, data_shapes=calib_data.provide_data, label_shapes=calib_data.provide_label)
+        mod.set_params(arg_params, aux_params)
+        if calib_mode == 'entropy':
+            logger.info('Collecting layer outputs from FP32 model using %d examples' % num_calib_examples)
+            nd_dict = _collect_layer_outputs(mod, calib_data, include_layer=calibrate_layer,
+                                             max_num_examples=num_calib_examples, logger=logger)
+            logger.info('Calculating optimal thresholds for quantization')
+            th_dict = _get_optimal_thresholds(nd_dict, logger=logger)
+        elif calib_mode == 'naive':
+            logger.info('Collecting layer output min/max values from FP32 model using %d examples' % num_calib_examples)
+            th_dict = _collect_layer_output_min_max(mod, calib_data, include_layer=calibrate_layer,
+                                                    max_num_examples=num_calib_examples, logger=logger)
+        else:
+            raise ValueError('Unknow calibration mode %s entered, supports `none`, `naive`, or `entropy`' % calib_mode)
+        logger.info('Calibrating quantized symbol')
+        qsym = _calibrate_quantized_sym(qsym, th_dict)
+
+    return qsym, qarg_params, aux_params
