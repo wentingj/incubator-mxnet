@@ -62,7 +62,8 @@ struct dequantize_v2 {
   template<typename DstDType, typename SrcDType>
   MSHADOW_XINLINE static void Map(int i, DstDType *out, const SrcDType *in,
                                   const float *imin_range, const float *imax_range) {
-    // out[i] = QuantizeToFloat(in[i], *imin_range, *imax_range);
+    using mshadow::red::limits::MinValue;
+    using mshadow::red::limits::MaxValue;
     float real_range = MaxAbs(*imax_range, *imin_range);
     float quantized_range = MinAbs(MinValue<SrcDType>(), MaxValue<SrcDType>());
     float scale = real_range / quantized_range;
