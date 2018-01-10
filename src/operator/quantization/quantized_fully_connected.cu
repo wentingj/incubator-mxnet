@@ -15,10 +15,13 @@ namespace op {
 // value + bias_value * (range1 / limit_range1) * (limit_range2 / range2)
 struct QuantizedBiasAddKernel {
   MSHADOW_XINLINE static void Map(int i, size_t k, int32_t *out,
-    const int8_t *bias, const float *min_out, const float *max_out,
-    const float *min_bias, const float *max_bias) {
+                                  const int8_t *bias, const float *min_out,
+                                  const float *max_out, const float *min_bias,
+                                  const float *max_bias) {
     typedef int32_t T1;
     typedef int8_t  T2;
+    using mshadow::red::limits::MinValue;
+    using mshadow::red::limits::MaxValue;
     float float_for_one_out_quant  =
       MaxAbs(*min_out, *max_out) / static_cast<double>(MaxValue<T1>());
     float float_for_one_bias_quant =
