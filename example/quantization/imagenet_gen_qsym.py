@@ -138,7 +138,8 @@ if __name__ == '__main__':
         logger.info('Quantizing FP32 model %s' % args.model)
         qsym, qarg_params, aux_params = get_quantized_model(ctx=mx.gpu(0), sym=sym, params=(arg_params, aux_params),
                                                             calib_mode=calib_mode,
-                                                            excluded_sym_names=excluded_sym_names)
+                                                            excluded_sym_names=excluded_sym_names,
+                                                            logger=logger)
         sym_name = '%s-symbol.json' % (prefix + '-quantized')
         save_symbol(sym_name, qsym, logger)
     else:
@@ -160,7 +161,8 @@ if __name__ == '__main__':
                                                              calib_data=data, calib_mode=calib_mode,
                                                              excluded_sym_names=excluded_sym_names,
                                                              num_calib_examples=num_calib_batches * batch_size,
-                                                             calibrate_layer=calibrate_layer)
+                                                             calibrate_layer=calibrate_layer,
+                                                             logger=logger)
         if calib_mode == 'entropy':
             suffix = '-quantized-%dbatches-entropy' % num_calib_batches
         elif calib_mode == 'naive':
