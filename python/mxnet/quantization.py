@@ -310,14 +310,11 @@ def _load_params(params, logger=logging):
                          ' a pair of dictionaries representing arg_params and aux_params')
 
 
-def get_quantized_model(ctx, sym, params, calib_data=None, calib_mode='entropy',
-                        excluded_sym_names=None, num_calib_examples=320,
-                        calibrate_layer=None, label_name='softmax_label', logger=logging):
+def get_quantized_model(sym, params, excluded_sym_names=None,
+                        calib_mode='entropy', calib_data=None,
+                        num_calib_examples=None, calib_layer=None,
+                        ctx=None, label_name='softmax_label', logger=logging):
     """User-level API for generating a quantized model from a FP32 model w/ or w/o calibration."""
-    if not isinstance(ctx, Context):
-        raise ValueError('generate_quantized_model currently only supports single ctx, while received %s' % str(ctx))
-    if calib_mode is None:
-        calib_mode = 'none'
     sym = _load_sym(sym, logger)
     arg_params, aux_params = _load_params(params, logger)
 
@@ -338,30 +335,33 @@ def get_quantized_model(ctx, sym, params, calib_data=None, calib_mode='entropy',
     logger.info('Quantizing parameters')
     qarg_params = _quantize_params(qsym, arg_params)
 
-    if calib_mode != 'none':
+    if calib_mode is not None and calib_mode != 'none':
+        if not isinstance(ctx, Context):
+            raise ValueError('currently only supports single ctx, while received %s' % str(ctx))
         if calib_data is None:
-            raise ValueError('calib_data must be provided with calib_mode=%s' % calib_mode)
+            raise ValueError('calib_data must be provided when calib_mode=%s' % calib_mode)
         if not isinstance(calib_data, DataIter):
             raise ValueError('calib_data must be of DataIter type when calib_mode=%s,'
                              ' while received type %s' % (calib_mode, str(type(calib_data))))
-        if calibrate_layer is None:
-            calibrate_layer = lambda name: name.endswith('_output')
+        if calib_layer is None:
+            calib_layer = lambda name: name.endswith('_output')
 
         mod = Module(symbol=sym, context=ctx, label_names=[label_name,])
         mod.bind(for_training=False, data_shapes=calib_data.provide_data, label_shapes=calib_data.provide_label)
         mod.set_params(arg_params, aux_params)
         if calib_mode == 'entropy':
             logger.info('Collecting layer outputs from FP32 model using %d examples' % num_calib_examples)
-            nd_dict = _collect_layer_outputs(mod, calib_data, include_layer=calibrate_layer,
+            nd_dict = _collect_layer_outputs(mod, calib_data, include_layer=calib_layer,
                                              max_num_examples=num_calib_examples, logger=logger)
             logger.info('Calculating optimal thresholds for quantization')
             th_dict = _get_optimal_thresholds(nd_dict, logger=logger)
         elif calib_mode == 'naive':
             logger.info('Collecting layer output min/max values from FP32 model using %d examples' % num_calib_examples)
-            th_dict = _collect_layer_output_min_max(mod, calib_data, include_layer=calibrate_layer,
+            th_dict = _collect_layer_output_min_max(mod, calib_data, include_layer=calib_layer,
                                                     max_num_examples=num_calib_examples, logger=logger)
         else:
-            raise ValueError('Unknow calibration mode %s entered, supports `none`, `naive`, or `entropy`' % calib_mode)
+            raise ValueError('unknown calibration mode %s received, expected `none`, `naive`, or `entropy`'
+                             % calib_mode)
         logger.info('Calibrating quantized symbol')
         qsym = _calibrate_quantized_sym(qsym, th_dict)
 

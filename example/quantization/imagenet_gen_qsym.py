@@ -110,14 +110,14 @@ if __name__ == '__main__':
     excluded_sym_names = []
     if args.model == 'imagenet1k-resnet-152':
         rgb_mean = '0,0,0'
-        calibrate_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
+        calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
                                                                      or name.find('sc') != -1
                                                                      or name.find('fc') != -1)
         if exclude_first_conv:
             excluded_sym_names = ['conv0']
     elif args.model == 'imagenet1k-inception-bn':
         rgb_mean = '123.68,116.779,103.939'
-        calibrate_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
+        calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
                                                                      or name.find('fc') != -1)
         if exclude_first_conv:
             excluded_sym_names = ['conv_1']
@@ -136,10 +136,9 @@ if __name__ == '__main__':
 
     if calib_mode == 'none':
         logger.info('Quantizing FP32 model %s' % args.model)
-        qsym, qarg_params, aux_params = get_quantized_model(ctx=mx.gpu(0), sym=sym, params=(arg_params, aux_params),
-                                                            calib_mode=calib_mode,
+        qsym, qarg_params, aux_params = get_quantized_model(sym=sym, params=(arg_params, aux_params),
                                                             excluded_sym_names=excluded_sym_names,
-                                                            logger=logger)
+                                                            calib_mode=calib_mode, logger=logger)
         sym_name = '%s-symbol.json' % (prefix + '-quantized')
         save_symbol(sym_name, qsym, logger)
     else:
@@ -157,12 +156,11 @@ if __name__ == '__main__':
                                      seed=args.shuffle_seed,
                                      **mean_args)
 
-        cqsym, qarg_params, aux_params = get_quantized_model(ctx=mx.gpu(0), sym=sym, params=(arg_params, aux_params),
-                                                             calib_data=data, calib_mode=calib_mode,
+        cqsym, qarg_params, aux_params = get_quantized_model(sym=sym, params=(arg_params, aux_params),
                                                              excluded_sym_names=excluded_sym_names,
+                                                             calib_mode=calib_mode, calib_data=data,
                                                              num_calib_examples=num_calib_batches * batch_size,
-                                                             calibrate_layer=calibrate_layer,
-                                                             logger=logger)
+                                                             calib_layer=calib_layer, ctx=mx.gpu(0), logger=logger)
         if calib_mode == 'entropy':
             suffix = '-quantized-%dbatches-entropy' % num_calib_batches
         elif calib_mode == 'naive':
