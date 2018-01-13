@@ -1,3 +1,5 @@
+"""Some of the tests using CUDNN requires a special GPU instruction called dp4a which exists
+only on P4 graphics cards for low bit inner products."""
 import mxnet as mx
 import numpy as np
 from mxnet.test_utils import *
@@ -179,12 +181,133 @@ def test_quantized_conv():
             if no_bias:
                 assert_almost_equal(output.asnumpy(), qoutput.asnumpy())
             else:
+                # with adding bias, accuracy loss should not be greater than one
                 diff = mx.nd.abs(output - qoutput.astype(output.dtype))
                 cond = mx.nd.lesser(2, diff).sum().asscalar()
                 assert cond == 0
 
     check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), True)
     check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), False)
+
+
+def test_quantized_pooling():
+    if mx.current_context().device_type != 'gpu':
+        return
+
+    def check_quantized_pooling(data_shape, kernel, pool_type, pad, stride, global_pool):
+        with mx.Context('gpu', 0):
+            data = mx.sym.Variable(name='data', shape=data_shape, dtype='float32')
+            pooling_fp32 = mx.sym.Pooling(data=data, kernel=kernel, pad=pad, stride=stride,
+                                          pool_type=pool_type, global_pool=global_pool, cudnn_off=False)
+            arg_shapes, _, _ = pooling_fp32.infer_shape(data=data_shape)
+            arg_names = pooling_fp32.list_arguments()
+            pooling_fp32_exe = pooling_fp32.simple_bind(ctx=mx.current_context(), grad_req='null')
+            pooling_fp32_exe.arg_dict[arg_names[0]][:] = mx.nd.random.uniform(low=-127.0, high=127.0,
+                                                                              shape=data_shape).astype('int32')
+            output = pooling_fp32_exe.forward()[0]
+
+            qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='int8')
+            min_data = mx.sym.Variable(name='min_data')
+            max_data = mx.sym.Variable(name='max_data')
+            quantized_pooling = mx.sym.contrib.quantized_pooling(data=qdata, min_data=min_data,
+                                                                 max_data=max_data, kernel=kernel,
+                                                                 pad=pad, stride=stride, pool_type=pool_type,
+                                                                 global_pool=global_pool)
+            pooling_int8_exe = quantized_pooling.simple_bind(ctx=mx.current_context(), grad_req='null')
+            qarg_names = quantized_pooling.list_arguments()
+            pooling_int8_exe.arg_dict[qarg_names[0]][:] = pooling_fp32_exe.arg_dict[arg_names[0]].astype('int8')
+            quantized_range = 127.0
+            pooling_int8_exe.arg_dict[qarg_names[1]][:] = -quantized_range
+            pooling_int8_exe.arg_dict[qarg_names[2]][:] = quantized_range
+            qoutput, min_range, max_range = pooling_int8_exe.forward()
+
+            if pool_type == 'max':
+                assert_almost_equal(output.asnumpy(), qoutput.asnumpy())
+            elif pool_type == 'avg':  # for avg pooling, fp32 and int8 may be different due to rounding errors
+                diff = mx.nd.abs(output - qoutput.astype(output.dtype))
+                cond = mx.nd.lesser(2, diff).sum().asscalar()
+                assert cond == 0
+
+    check_quantized_pooling((3, 4, 56, 56), (3, 3), 'max', (0, 0), (2, 2), False)
+    check_quantized_pooling((3, 4, 56, 56), (3, 3), 'max', (0, 0), (2, 2), True)
+    check_quantized_pooling((3, 512, 7, 7), (7, 7), 'avg', (0, 0), (1, 1), False)
+    check_quantized_pooling((3, 512, 7, 7), (7, 7), 'avg', (0, 0), (1, 1), True)
+
+
+def test_quantized_fc():
+    if mx.current_context().device_type != 'gpu':
+        return
+
+    def check_quantized_fc(data_shape, num_hidden, no_bias, flatten=True):
+        with mx.Context('gpu', 0):
+            data = mx.sym.Variable(name='data', shape=data_shape, dtype='float32')
+            fc_fp32 = mx.sym.FullyConnected(data=data, num_hidden=num_hidden, no_bias=no_bias, flatten=flatten)
+            arg_shapes, _, _ = fc_fp32.infer_shape(data=data_shape)
+            arg_names = fc_fp32.list_arguments()
+            fc_fp32_exe = fc_fp32.simple_bind(ctx=mx.current_context(), grad_req='null')
+            fc_fp32_exe.arg_dict[arg_names[0]][:] = mx.nd.random.uniform(low=-127.0, high=127.0,
+                                                                         shape=data_shape).astype('int32')
+            fc_fp32_exe.arg_dict[arg_names[1]][:] = mx.nd.random.uniform(low=-127.0, high=127.0,
+                                                                         shape=arg_shapes[1]).astype('int32')
+            if not no_bias:
+                fc_fp32_exe.arg_dict[arg_names[2]][:] = mx.nd.random.uniform(low=-127.0, high=127.0,
+                                                                             shape=arg_shapes[2]).astype('int32')
+            output = fc_fp32_exe.forward()[0]
+
+            qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='int8')
+            fc_int8 = mx.sym.contrib.quantized_fully_connected(data=qdata, num_hidden=num_hidden,
+                                                               no_bias=no_bias, flatten=flatten)
+            fc_int8_exe = fc_int8.simple_bind(ctx=mx.current_context(), grad_req='null')
+            qarg_names = fc_int8.list_arguments()
+            fc_int8_exe.arg_dict[qarg_names[0]][:] = fc_fp32_exe.arg_dict[arg_names[0]].astype('int8')
+            fc_int8_exe.arg_dict[qarg_names[1]][:] = fc_fp32_exe.arg_dict[arg_names[1]].astype('int8')
+            quantized_range = 127.0
+            if no_bias:
+                fc_int8_exe.arg_dict[qarg_names[2]][:] = -quantized_range
+                fc_int8_exe.arg_dict[qarg_names[3]][:] = quantized_range
+                fc_int8_exe.arg_dict[qarg_names[4]][:] = -quantized_range
+                fc_int8_exe.arg_dict[qarg_names[5]][:] = quantized_range
+            else:
+                fc_int8_exe.arg_dict[qarg_names[2]][:] = fc_fp32_exe.arg_dict[arg_names[2]].astype('int8')
+                fc_int8_exe.arg_dict[qarg_names[3]][:] = -quantized_range
+                fc_int8_exe.arg_dict[qarg_names[4]][:] = quantized_range
+                fc_int8_exe.arg_dict[qarg_names[5]][:] = -quantized_range
+                fc_int8_exe.arg_dict[qarg_names[6]][:] = quantized_range
+                fc_int8_exe.arg_dict[qarg_names[7]][:] = -quantized_range
+                fc_int8_exe.arg_dict[qarg_names[8]][:] = quantized_range
+            qoutput, min_range, max_range = fc_int8_exe.forward()
+
+            if no_bias:
+                assert_almost_equal(output.asnumpy(), qoutput.asnumpy())
+            else:
+                # with adding bias, accuracy loss should not be greater than one
+                diff = mx.nd.abs(output - qoutput.astype(output.dtype))
+                cond = mx.nd.lesser(2, diff).sum().asscalar()
+                assert cond == 0
+
+    check_quantized_fc((32, 512, 2, 2), 100, True)
+    check_quantized_fc((32, 111, 2, 2), 100, True)
+    check_quantized_fc((32, 512, 2, 2), 100, False)
+    check_quantized_fc((32, 111, 2, 2), 100, False)
+
+
+def test_quantized_flatten():
+    def check_quantized_flatten(shape):
+        qdata = mx.nd.random.uniform(low=-127, high=127, shape=shape).astype('int8')
+        min_data = mx.nd.array([-1023.343], dtype='float32')
+        max_data = mx.nd.array([2343.324275], dtype='float32')
+        qoutput, min_output, max_output = mx.nd.contrib.quantized_flatten(qdata, min_data, max_data)
+        assert qoutput.ndim == 2
+        assert qoutput.shape[0] == qdata.shape[0]
+        assert qoutput.shape[1] == np.prod(qdata.shape[1:])
+        assert same(qdata.asnumpy().flatten(), qoutput.asnumpy().flatten())
+        assert same(min_data.asnumpy(), min_output.asnumpy())
+        assert same(max_data.asnumpy(), max_output.asnumpy())
+
+    check_quantized_flatten((10,))
+    check_quantized_flatten((10, 15))
+    check_quantized_flatten((10, 15, 18))
+    check_quantized_flatten((3, 4, 23, 23))
 
 
 def test_calibrate_quantized_sym():
@@ -206,6 +329,9 @@ def test_calibrate_quantized_sym():
 
 if __name__ == "__main__":
     set_default_context(mx.gpu(0))
-    test_quantized_conv()
-    #import nose
-    #nose.runmodule()
+    # test_quantized_conv()
+    # test_quantized_pooling()
+    test_quantized_fc()
+    test_quantized_flatten()
+    # import nose
+    # nose.runmodule()

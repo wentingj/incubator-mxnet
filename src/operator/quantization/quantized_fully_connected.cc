@@ -21,10 +21,7 @@ bool QuantizedFullyConnectedShape(const nnvm::NodeAttrs& attrs,
   CHECK(!shape_is_none(in_shape->at(0)))
     << "QuantizedFullyConnectedOp input data shape must be given";
   const TShape& dshape = in_shape->at(0);
-  CHECK_EQ(dshape[1] % 4, 0)
-    << "for 8bit fully connected, dshape[1] must be multiple of 4";
-
-  TShape wshape = Shape2(param.num_hidden, dshape[1]);
+  TShape wshape = Shape2(param.num_hidden, dshape.ProdShape(1, dshape.ndim()));
   SHAPE_ASSIGN_CHECK(*in_shape, 1, wshape);
   if (!param.no_bias) {
     TShape bshape = Shape1(param.num_hidden);
