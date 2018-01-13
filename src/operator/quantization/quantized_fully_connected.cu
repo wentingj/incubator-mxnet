@@ -57,7 +57,7 @@ void QuantizedFullyConnectedForwardGPU(const nnvm::NodeAttrs& attrs,
 
   // row_C = col_C(T) = cublas(col_B * col_A(T)) = cublas(row_B(T), row_A)
   // row_C = col_C(T) = cublas(col_B(T) * col_A(T)) = cublas(row_B, row_A)
-  size_t m = dshape[0], n = dshape[1], k = wshape[0];
+  const int m = dshape[0], n = dshape.ProdShape(1, dshape.ndim()), k = wshape[0];
   CmpType alpha = 1.0f;
   CmpType beta  = 0.0f;
   const cudaDataType src_type = mshadow::DataType<SrcType>::kCudaFlag;
