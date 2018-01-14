@@ -1,91 +1,6 @@
 """Some of the tests using CUDNN requires a special GPU instruction called dp4a which exists
 only on P4 graphics cards for low bit inner products."""
-import mxnet as mx
-import numpy as np
 from mxnet.test_utils import *
-
-ctx = mx.gpu(0)
-dtype = np.int8
-dtype_ = np.float32
-n = 4
-
-
-# def test_quantized_lrn():
-#     n = 5
-#     x_ = np.random.uniform(low=-100, high=100, size=(1,1,n,n))
-#     x = nd.array(x_, ctx=ctx, dtype=dtype)
-#     y = nd.quantized_lrn(x, nsize=3)
-#
-#
-# def test_quantized_conv2d():
-#     x_ = np.random.uniform(low=-100, high=100, size=(4, 5, 5, 4))
-#     k_ = np.random.uniform(low=-100, high=100, size=(4, 3, 3, 4))
-#     x = nd.array(x_, ctx=ctx, dtype=dtype)
-#     k = nd.array(k_, ctx=ctx, dtype=dtype)
-#     min0x = nd.array([-1.0], ctx=ctx, dtype=np.float32)
-#     max0x = nd.array([1.0], ctx=ctx, dtype=np.float32)
-#     min0k = nd.array([-1.0], ctx=ctx, dtype=np.float32)
-#     max0k = nd.array([1.0], ctx=ctx, dtype=np.float32)
-#     y, min1, max1 = nd.quantized_conv2d(x, k, min0x, max0x, min0k, max0k,
-#             stride=[1, 1], pad=[1, 1])
-#     y_ = y.asnumpy().astype(np.int32)
-#
-#
-# def test_quantized_relu():
-#     a_ = np.random.uniform(low=-100, high=100, size=(n,n))
-#     a = nd.array(a_, ctx=ctx, dtype=dtype)
-#     min0 = nd.array([-1.0], ctx=ctx, dtype=np.float32)
-#     max0 = nd.array([1.0], ctx=ctx, dtype=np.float32)
-#     b, min1, max1 = nd.quantized_relu(a, min0, max0)
-#
-#
-# def test_quantized_max_pool():
-#     a_ = np.random.uniform(low=-128, high=127, size=(1, 1, n, n))
-#     a = nd.array(a_, ctx=ctx, dtype=dtype)
-#     min0 = nd.array([-1.0], ctx=ctx, dtype=np.float32)
-#     max0 = nd.array([1.0], ctx=ctx, dtype=np.float32)
-#     b, min1, max1 = nd.quantized_max_pool(a, min0, max0, kernel=[2, 2])
-#
-#
-# def test_quantized_matmul():
-#     m = 1
-#     n = 2
-#     k = 3
-#     a_ = np.random.uniform(low=-100, high=100, size=(m,n))
-#     a = nd.array(a_, ctx=ctx, dtype=dtype)
-#     b_ = np.random.uniform(low=-100, high=100, size=(n,k))
-#     b = nd.array(b_, ctx=ctx, dtype=dtype)
-#     min0a = nd.array([-1.0], ctx=ctx, dtype=np.float32)
-#     max0a = nd.array([1.0], ctx=ctx, dtype=np.float32)
-#     min0b = nd.array([-1.0], ctx=ctx, dtype=np.float32)
-#     max0b = nd.array([1.0], ctx=ctx, dtype=np.float32)
-#     c, min1, max1 = nd.quantized_matmul(a, b, min0a, max0a, min0b, max0b)
-#
-#
-# def test_matmul():
-#     m = 3
-#     n = 2
-#     k = 4
-#
-#     A = mx.sym.Variable('A')
-#     B = mx.sym.Variable('B')
-#     C = mx.sym.matmul(A, B, name='C')
-#     # (m, n) * (n, k) = (m, k) [C = A * B]
-#
-#     a  = nd.uniform(low=-1.0, high=1.0, shape=(m, n), ctx=ctx, dtype=dtype_)
-#     b  = nd.uniform(low=-1.0, high=1.0, shape=(n, k), ctx=ctx, dtype=dtype_)
-#     dc = nd.uniform(low=-1.0, high=1.0, shape=(m, k), ctx=ctx, dtype=dtype_)
-#     da = nd.zeros(shape=(m, n), ctx=ctx, dtype=dtype_)
-#     db = nd.zeros(shape=(n, k), ctx=ctx, dtype=dtype_)
-#     executor = C.bind(ctx, {'A': a, 'B': b}, {'A': da, 'B': db})
-#     out = executor.forward(is_train=True)
-#     executor.backward(out_grads=dc)
-#     # (m, n) = (m, k) * (k, n) [dA = dC * B.T]
-#     da_ = np.dot(dc.asnumpy(), b.asnumpy().T)
-#     # (n, k) = (n, m) * (m, k) [dB = A.T * dC]
-#     db_ = np.dot(a.asnumpy().T, dc.asnumpy())
-#     # assert(da_, da)
-#     # assert(db_, db)
 
 
 def test_quantize_float32_to_int8():
@@ -122,6 +37,59 @@ def test_dequantize_int8_to_float32():
     assert data.dtype == np.float32
     data_np = qdata_np * scale
     assert_almost_equal(data.asnumpy(), data_np)
+
+
+def test_requantize_int32_to_int8():
+    def quantized_int32_to_float(qdata, min_range, max_range):
+        assert qdata.dtype == 'int32'
+        quantized_range = np.iinfo('int32').max
+        real_range = np.maximum(np.abs(min_range), np.abs(max_range))
+        scale = float(real_range) / float(quantized_range)
+        return qdata.astype('float32') * scale
+
+    def float_to_quantized_int8(data, min_range, max_range):
+        assert data.dtype == 'float32'
+        real_range = np.maximum(np.abs(min_range), np.abs(max_range))
+        quantized_range = np.iinfo('int8').max
+        scale = float(quantized_range) / float(real_range)
+        return (np.sign(data) * np.minimum(np.abs(data) * scale + 0.5, quantized_range)).astype('int8')
+
+    def requantize(qdata, min_data, max_data, real_range):
+        data = quantized_int32_to_float(qdata, min_data, max_data)
+        output = float_to_quantized_int8(data, -real_range, real_range)
+        return output, -real_range, real_range
+
+    def requantize_baseline(qdata, min_data, max_data, min_calib_range=None, max_calib_range=None):
+        if min_calib_range is not None and max_calib_range is not None:
+            real_range = np.maximum(np.abs(min_calib_range), np.abs(max_calib_range))
+            return requantize(qdata, min_data, max_data, real_range)
+        else:
+            min_range = quantized_int32_to_float(np.min(qdata), min_data, max_data)
+            max_range = quantized_int32_to_float(np.max(qdata), min_data, max_data)
+            return requantize(qdata, min_data, max_data, np.maximum(np.abs(min_range), np.abs(max_range)))
+
+    def check_requantize(shape, min_calib_range=None, max_calib_range=None):
+        qdata = mx.nd.random.uniform(low=-1000.0, high=1000.0, shape=shape).astype('int32')
+        min_range = mx.nd.array([-1010.0])
+        max_range = mx.nd.array([1020.0])
+        if min_calib_range is None or max_calib_range is None:
+            qdata_int8, min_output, max_output = mx.nd.contrib.requantize(qdata, min_range, max_range)
+        else:
+            qdata_int8, min_output, max_output = mx.nd.contrib.requantize(qdata, min_range, max_range,
+                                                                          min_calib_range, max_calib_range)
+
+        qdata_int8_np, min_output_np, max_output_np = requantize_baseline(qdata.asnumpy(), min_range.asscalar(),
+                                                                          max_range.asscalar(),
+                                                                          min_calib_range=min_calib_range,
+                                                                          max_calib_range=max_calib_range)
+        assert_almost_equal(qdata_int8.asnumpy(), qdata_int8_np)
+        assert_almost_equal(min_output.asnumpy(), np.array([min_output_np]))
+        assert_almost_equal(max_output.asnumpy(), np.array([max_output_np]))
+
+    check_requantize((3, 4, 10, 10))
+    check_requantize((32, 3, 23, 23))
+    check_requantize((3, 4, 10, 10), min_calib_range=-1050.0, max_calib_range=1040.0)
+    check_requantize((32, 3, 23, 23), min_calib_range=-134.349, max_calib_range=523.43)
 
 
 def test_quantized_conv():
@@ -329,9 +297,5 @@ def test_calibrate_quantized_sym():
 
 if __name__ == "__main__":
     set_default_context(mx.gpu(0))
-    # test_quantized_conv()
-    # test_quantized_pooling()
-    test_quantized_fc()
-    test_quantized_flatten()
-    # import nose
-    # nose.runmodule()
+    import nose
+    nose.runmodule()
