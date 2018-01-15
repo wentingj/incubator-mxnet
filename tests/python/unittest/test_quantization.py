@@ -345,6 +345,5 @@ def test_get_optimal_thresholds():
 
 
 if __name__ == "__main__":
-    set_default_context(mx.gpu(0))
     import nose
     nose.runmodule()
