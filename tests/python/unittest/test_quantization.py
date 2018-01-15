@@ -278,21 +278,70 @@ def test_quantized_flatten():
     check_quantized_flatten((3, 4, 23, 23))
 
 
-def test_calibrate_quantized_sym():
+def test_quantize_params():
     data = mx.sym.Variable('data')
-    conv = mx.sym.Convolution(data=data, num_filter=1, kernel=(1, 1), no_bias=True)
-    qnet = mx.quantization._quantize_symbol(conv)
-    requantize_op_name = 'requantize_convolution0'
-    th_dict = {'convolution0_output': (-11.3902, 20.3902304)}
-    cqnet = mx.quantization._calibrate_quantized_sym(qnet, th_dict)
-    attr_dict = cqnet.attr_dict()
-    assert requantize_op_name in attr_dict
-    lhs = float(attr_dict[requantize_op_name]['min_calib_range'])
-    rhs = th_dict['convolution0_output'][0]
-    assert (lhs - rhs) < 0.0001
-    lhs = float(attr_dict[requantize_op_name]['max_calib_range'])
-    rhs = th_dict['convolution0_output'][1]
-    assert (lhs - rhs) < 0.0001
+    conv = mx.sym.Convolution(data, kernel=(1, 1), num_filter=2048, name='conv')
+    sym = mx.sym.BatchNorm(data=conv, eps=2e-05, fix_gamma=False, momentum=0.9, use_global_stats=False, name='bn')
+    offline_params = [name for name in sym.list_arguments()
+                      if not name.startswith('data') and not name.endswith('label')]
+    params = {}
+    for name in offline_params:
+        params[name] = mx.nd.uniform(shape=(2, 2))
+    qsym = mx.quantization._quantize_symbol(sym, offline_params=offline_params)
+    qparams = mx.quantization._quantize_params(qsym, params)
+    param_names = params.keys()
+    qparam_names = qparams.keys()
+    for name in qparam_names:
+        if name.startswith('bn'):
+            assert name in param_names
+        elif name.startswith('conv'):
+            assert name not in param_names
+            assert name.find('quantize') != -1
+
+
+def test_quantize_sym_with_calib():
+    data = mx.sym.Variable('data')
+    conv = mx.sym.Convolution(data, kernel=(1, 1), num_filter=2048, name='conv')
+    bn = mx.sym.BatchNorm(data=conv, eps=2e-05, fix_gamma=False, momentum=0.9, use_global_stats=False, name='bn')
+    act = mx.sym.Activation(data=bn, act_type='relu', name='relu')
+    pool = mx.sym.Pooling(act, kernel=(7, 7), pool_type='avg', name='pool')
+    fc = mx.sym.FullyConnected(pool, num_hidden=1000, flatten=True, name='fc')
+    sym = mx.sym.SoftmaxOutput(fc, grad_scale=1, ignore_label=-1, multi_output=False,
+                               out_grad=False, preserve_shape=False, use_ignore=False, name='softmax')
+    offline_params = [name for name in sym.list_arguments()
+                      if not name.startswith('data') and not name.endswith('label')]
+    qsym = mx.quantization._quantize_symbol(sym, offline_params=offline_params)
+    requantize_op_names = ['requantize_conv', 'requantize_fc']
+    th_dict = {'conv_output': (np.random.uniform(), np.random.uniform()),
+               'fc_output': (np.random.uniform(), np.random.uniform())}
+    op_name_to_th_name = {'requantize_conv': 'conv_output', 'requantize_fc': 'fc_output'}
+    cqsym = mx.quantization._calibrate_quantized_sym(qsym, th_dict)
+    attr_dict = cqsym.attr_dict()
+    print(attr_dict)
+    for name in requantize_op_names:
+        assert name in attr_dict
+        lhs = float(attr_dict[name]['min_calib_range'])
+        rhs = th_dict[op_name_to_th_name[name]][0]
+        assert_almost_equal(np.array([lhs]), np.array([rhs]))
+        lhs = float(attr_dict[name]['max_calib_range'])
+        rhs = th_dict[op_name_to_th_name[name]][1]
+        assert_almost_equal(np.array([lhs]), np.array([rhs]))
+
+
+def test_get_optimal_thresholds():
+    """Given a ndarray with elements following a uniform distribution,
+    the optimal threshold for quantizing the ndarray should be either
+    abs(min(nd)) or abs(max(nd))."""
+    def get_threshold(nd):
+        min_nd = mx.nd.min(nd)
+        max_nd = mx.nd.max(nd)
+        return mx.nd.maximum(mx.nd.abs(min_nd), mx.nd.abs(max_nd)).asnumpy()
+
+    nd_dict = {}
+    nd_dict['layer1'] = mx.nd.uniform(low=-10.532, high=11.3432, shape=(8, 3, 23, 23))
+    th_dict = mx.quantization._get_optimal_thresholds(nd_dict)
+    assert 'layer1' in th_dict
+    assert_almost_equal(np.array([th_dict['layer1'][1]]), get_threshold(nd_dict['layer1']))
 
 
 if __name__ == "__main__":

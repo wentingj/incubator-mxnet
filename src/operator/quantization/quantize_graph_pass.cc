@@ -18,9 +18,16 @@ using nnvm::NodeEntry;
 using nnvm::Graph;
 
 NodePtr CreateNode(std::string op_name, std::string node_name) {
-  NodePtr node     = Node::Create();
-  if (op_name != "nullptr") node->attrs.op = Op::Get(op_name);
+  NodePtr node = Node::Create();
   node->attrs.name = node_name;
+  if (op_name == "nullptr") {
+    node->attrs.op = nullptr;
+    // ugly workaround because VariableParam is not exposed
+    node->attrs.parsed =
+      nnvm::Symbol::CreateVariable(node->attrs.name).outputs[0].node->attrs.parsed;
+  } else {
+    node->attrs.op = Op::Get(op_name);
+  }
   return node;
 }
 
