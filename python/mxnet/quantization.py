@@ -203,15 +203,15 @@ def _get_optimal_threshold(arr, num_bins=8001, num_quantized_bins=255):
     th = max(abs(min_val), abs(max_val))
 
     hist, hist_edeges = np.histogram(arr, bins=num_bins, range=(-th, th))
-    zero_bin_idx = num_bins / 2
-    num_half_quantized_bins = num_quantized_bins / 2
-    assert np.allclose(hist_edeges[int(zero_bin_idx)] + hist_edeges[int(zero_bin_idx + 1)], 0, rtol=1e-5, atol=1e-7)
+    zero_bin_idx = num_bins // 2
+    num_half_quantized_bins = num_quantized_bins // 2
+    assert np.allclose(hist_edeges[zero_bin_idx] + hist_edeges[zero_bin_idx + 1], 0, rtol=1e-5, atol=1e-7)
 
-    thresholds = np.zeros(num_bins / 2 + 1 - num_quantized_bins / 2)
+    thresholds = np.zeros(num_bins // 2 + 1 - num_quantized_bins // 2)
     divergence = np.zeros_like(thresholds)
     quantized_bins = np.zeros(num_quantized_bins, dtype=np.int32)
-    for i in range(num_quantized_bins / 2,
-                   num_bins / 2 + 1):  # i means the number of bins on half axis excluding the zero bin
+    for i in range(num_quantized_bins // 2,
+                   num_bins // 2 + 1):  # i means the number of bins on half axis excluding the zero bin
         p_bin_idx_start = zero_bin_idx - i
         p_bin_idx_stop = zero_bin_idx + i + 1
         thresholds[i - num_half_quantized_bins] = hist_edeges[p_bin_idx_stop]
@@ -232,7 +232,7 @@ def _get_optimal_threshold(arr, num_bins=8001, num_quantized_bins=255):
         is_nonzeros = (sliced_nd_hist != 0).astype(np.int32)
 
         # calculate how many bins should be merged to generate quantized distribution q
-        num_merged_bins = p.size / num_quantized_bins
+        num_merged_bins = p.size // num_quantized_bins
         # merge hist into num_quantized_bins bins
         for j in range(num_quantized_bins):
             start = j * num_merged_bins

@@ -3,7 +3,7 @@ Ref: http://images.nvidia.com/content/pdf/tesla/184457-Tesla-P4-Datasheet-NV-Fin
 """
 import mxnet as mx
 import numpy as np
-from mxnet.test_utils import assert_almost_equal, rand_ndarray, rand_shape_nd, same
+from mxnet.test_utils import assert_almost_equal, rand_ndarray, rand_shape_nd, same, set_default_context
 
 
 def test_quantize_float32_to_int8():
@@ -348,5 +348,6 @@ def test_get_optimal_thresholds():
 
 
 if __name__ == "__main__":
+    set_default_context(mx.gpu(0))
     import nose
     nose.runmodule()
