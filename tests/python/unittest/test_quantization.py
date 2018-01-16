@@ -1,7 +1,9 @@
 """Some of the tests using CUDNN require a special GPU instruction called dp4a.
 Ref: http://images.nvidia.com/content/pdf/tesla/184457-Tesla-P4-Datasheet-NV-Final-Letter-Web.pdf
 """
-from mxnet.test_utils import *
+import mxnet as mx
+import numpy as np
+from mxnet.test_utils import assert_almost_equal, rand_ndarray, rand_shape_nd, same
 
 
 def test_quantize_float32_to_int8():
@@ -326,7 +328,7 @@ def test_quantize_sym_with_calib():
         assert_almost_equal(np.array([lhs]), np.array([rhs]))
         lhs = float(attr_dict[name]['max_calib_range'])
         rhs = th_dict[op_name_to_th_name[name]][1]
-        assert_almost_equal(np.array([lhs]), np.array([rhs]))
+        assert_almost_equal(np.array([lhs]), np.array([rhs]), rtol=1e-3, atol=1e-5)
 
 
 def test_get_optimal_thresholds():

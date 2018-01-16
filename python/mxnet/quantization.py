@@ -205,7 +205,7 @@ def _get_optimal_threshold(arr, num_bins=8001, num_quantized_bins=255):
     hist, hist_edeges = np.histogram(arr, bins=num_bins, range=(-th, th))
     zero_bin_idx = num_bins / 2
     num_half_quantized_bins = num_quantized_bins / 2
-    assert np.allclose(hist_edeges[zero_bin_idx] + hist_edeges[zero_bin_idx + 1], 0, rtol=1e-5, atol=1e-7)
+    assert np.allclose(hist_edeges[int(zero_bin_idx)] + hist_edeges[int(zero_bin_idx + 1)], 0, rtol=1e-5, atol=1e-7)
 
     thresholds = np.zeros(num_bins / 2 + 1 - num_quantized_bins / 2)
     divergence = np.zeros_like(thresholds)
