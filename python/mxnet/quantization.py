@@ -273,7 +273,7 @@ def _get_optimal_thresholds(nd_dict, num_bins=8001, num_quantized_bins=255, logg
         logger.info('Calculating optimal thresholds for quantization using KL divergence'
                     ' with num_bins=%d and num_quantized_bins=%d' % (num_bins, num_quantized_bins))
     th_dict = {}
-    for k, v in nd_dict:
+    for k, v in nd_dict.items():
         min_val, max_val, min_divergence, opt_th = _get_optimal_threshold(v, num_bins=num_bins,
                                                                           num_quantized_bins=num_quantized_bins)
         del v  # release the memory of ndarray
