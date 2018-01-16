@@ -3,9 +3,15 @@ import mxnet as mx
 from mxnet.test_utils import check_speed
 
 
+def quantize_int8_helper(data):
+    min_data = mx.nd.min(data)
+    max_data = mx.nd.max(data)
+    return mx.nd.contrib.quantize(data, min_data, max_data, out_type='int8')
+
+
 def benchmark_convolution(data_shape, kernel, num_filter, pad, stride, no_bias=True, layout='NCHW', repeats=20):
     ctx_gpu = mx.gpu(0)
-    data = mx.sym.Variable(name="data", shape=data_shape)
+    data = mx.sym.Variable(name="data", shape=data_shape, dtype='float32')
     # conv cudnn
     conv_cudnn = mx.sym.Convolution(data=data, kernel=kernel, num_filter=num_filter, pad=pad, stride=stride,
                                     no_bias=no_bias, layout=layout, cudnn_off=False, name="conv_cudnn")
@@ -28,12 +34,12 @@ def benchmark_convolution(data_shape, kernel, num_filter, pad, stride, no_bias=T
                                                      kernel=kernel, num_filter=num_filter, pad=pad, stride=stride,
                                                      no_bias=no_bias, layout=layout, cudnn_off=False,
                                                      name='quantized_conv2d')
-    qargs = {qdata.name: mx.quantization.quantize(input_data)[0],
-             min_data.name: mx.quantization.quantize(input_data)[1],
-             max_data.name: mx.quantization.quantize(input_data)[2],
-             weight.name: mx.quantization.quantize(args[conv_weight_name])[0],
-             min_weight.name: mx.quantization.quantize(args[conv_weight_name])[1],
-             max_weight.name: mx.quantization.quantize(args[conv_weight_name])[2]}
+    qargs = {qdata.name: quantize_int8_helper(input_data)[0],
+             min_data.name: quantize_int8_helper(input_data)[1],
+             max_data.name: quantize_int8_helper(input_data)[2],
+             weight.name: quantize_int8_helper(args[conv_weight_name])[0],
+             min_weight.name: quantize_int8_helper(args[conv_weight_name])[1],
+             max_weight.name: quantize_int8_helper(args[conv_weight_name])[2]}
     qconv_time = check_speed(sym=quantized_conv2d, location=qargs, ctx=ctx_gpu, N=repeats,
                              grad_req='null', typ='forward') * 1000
 
