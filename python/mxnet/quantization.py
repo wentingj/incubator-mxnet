@@ -10,7 +10,7 @@ import ctypes
 import logging
 import os
 from .base import _LIB, check_call
-from .base import c_array, c_str, mx_uint
+from .base import c_array, c_str, mx_uint, c_str_array
 from .base import NDArrayHandle, SymbolHandle
 from .symbol import Symbol, load
 from . import ndarray as nd
@@ -118,19 +118,19 @@ def _calibrate_quantized_sym(qsym, th_dict):
         return qsym
     num_layer_outputs = len(th_dict)
     layer_output_names = []
-    low_quantiles = []
-    high_quantiles = []
+    min_vals = []
+    max_vals = []
     for k, v in th_dict.items():
         layer_output_names.append(k)
-        low_quantiles.append(v[0])
-        high_quantiles.append(v[1])
+        min_vals.append(v[0])
+        max_vals.append(v[1])
 
     calibrated_sym = SymbolHandle()
     check_call(_LIB.MXSetCalibTableToQuantizedSymbol(qsym.handle,
                                                      mx_uint(num_layer_outputs),
-                                                     c_array(ctypes.c_char_p, layer_output_names),
-                                                     c_array(ctypes.c_float, low_quantiles),
-                                                     c_array(ctypes.c_float, high_quantiles),
+                                                     c_str_array(layer_output_names),
+                                                     c_array(ctypes.c_float, min_vals),
+                                                     c_array(ctypes.c_float, max_vals),
                                                      ctypes.byref(calibrated_sym)))
     return Symbol(calibrated_sym)
 
@@ -322,7 +322,33 @@ def get_quantized_model(sym, params, excluded_sym_names=None,
                         calib_mode='entropy', calib_data=None,
                         num_calib_examples=None, calib_layer=None,
                         ctx=None, label_name='softmax_label', logger=logging):
-    """User-level API for generating a quantized model from a FP32 model w/ or w/o calibration."""
+    """User-level API for generating a quantized model from a FP32 model w/ or w/o calibration.
+    The quantization implementation adopts the TensorFlow's approach:
+    https://www.tensorflow.org/performance/quantization.
+    The calibration implementation borrows the idea of Nvidia's 8-bit Inference with TensorRT:
+    http://on-demand.gputechconf.com/gtc/2017/presentation/s7310-8-bit-inference-with-tensorrt.pdf
+    and adapts to MXNet.
+
+    Parameters
+    ----------
+    sym : str or Symbol
+        If sym is a string, it defines the path to the .json file of the symbol.
+        If sym is a Symbol, it defines the structure of a neural network for FP32 data types.
+    params : str, or tuple with two dictionaries of mapping str to NDArray
+        If params is a string, it defines the path to the .params file of the model.
+        If params is a tuple, it mush contain two dictionaries representing arg_params and aux_params, respectively.
+    excluded_sym_names : list of strings
+        A list of strings representing the names of the symbols that users want to excluding from being quantized.
+    calib_mode : str
+        If calib_mode='none', no calibration will be used and the thresholds for requantization after the corresponding
+        layers will be calculated on the fly by calling min and max operators. The quantized models generated in this
+        mode are normally 10-20% slower than those with calibrations during inference.
+        If calib_mode='naive', the min and max values of the layer outputs from a calibration dataet will be directly
+        taken as thresholds for quantization.
+        If calib_mode='entropy' (default mode), the thresholds for quantization will be derived such that the KL
+        divergence between the distributions of FP32 layer outputs and quantized layer outputs is minimized from
+        a calibration dataset.
+    """
     sym = _load_sym(sym, logger)
     arg_params, aux_params = _load_params(params, logger)
 

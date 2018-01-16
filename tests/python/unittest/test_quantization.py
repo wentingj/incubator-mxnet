@@ -1,5 +1,6 @@
-"""Some of the tests using CUDNN requires a special GPU instruction called dp4a which exists
-only on P4 graphics cards for low bit inner products."""
+"""Some of the tests using CUDNN require a special GPU instruction called dp4a.
+Ref: http://images.nvidia.com/content/pdf/tesla/184457-Tesla-P4-Datasheet-NV-Final-Letter-Web.pdf
+"""
 from mxnet.test_utils import *
 
 
