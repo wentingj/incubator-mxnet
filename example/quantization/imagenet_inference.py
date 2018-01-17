@@ -6,6 +6,12 @@ import logging
 from mxnet.quantization import *
 
 
+def download_dataset(dataset_url, dataset_dir, logger=None):
+    if logger is not None:
+        logger.info('Downloading dataset for inference from %s to %s' % (dataset_url, dataset_dir))
+    mx.test_utils.download(dataset_url, dataset_dir)
+
+
 def load_model(symbol_file, param_file, logger=None):
     cur_path = os.path.dirname(os.path.realpath(__file__))
     symbol_file_path = os.path.join(cur_path, symbol_file)
@@ -122,6 +128,7 @@ if __name__ == '__main__':
     logger.info('Input data shape = %s' % str(data_shape))
 
     dataset = args.dataset
+    download_dataset('http://data.mxnet.io/data/val_256_q90.rec', dataset)
     logger.info('Dataset for inference: %s' % dataset)
 
     # creating data iterator
