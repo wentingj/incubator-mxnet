@@ -12,8 +12,8 @@ DMLC_REGISTER_PARAMETER(RequantizeParam);
 
 NNVM_REGISTER_OP(_contrib_requantize)
 .describe(R"code(Given data that is quantized in int32 and the corresponding thresholds,
-requantize the data into int8 using min_range and max_range either calculated on the fly
-or from calibration. It's highly recommended to pre-calucate the min_range and max_range
+requantize the data into int8 using min and max thresholds either calculated at runtime
+or from calibration. It's highly recommended to pre-calucate the min and max thresholds
 through calibration since it is able to save the runtime of the operator and improve the
 inference accuracy.
 
@@ -36,9 +36,9 @@ inference accuracy.
   })
 .add_argument("data", "NDArray-or-Symbol", "A ndarray/symbol of type `int32`")
 .add_argument("min_range", "NDArray-or-Symbol", "The original minimum scalar value "
-  "in the form of float32 used for requantizing the int32 data into int8.")
+  "in the form of float32 used for quantizing data into int32.")
 .add_argument("max_range", "NDArray-or-Symbol", "The original maximum scalar value "
-  "in the form of float32 used for requantizing the int32 data into int8.")
+  "in the form of float32 used for quantizing data into int32.")
 .add_arguments(RequantizeParam::__FIELDS__());
 
 }  // namespace op

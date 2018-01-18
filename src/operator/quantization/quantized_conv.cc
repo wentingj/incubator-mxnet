@@ -18,6 +18,7 @@ bool QuantizedConvShape(const nnvm::NodeAttrs& attrs,
   const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
   CHECK_EQ(param.num_group, 1U) << "quantized_conv only supports num_group=1 for now";
   CHECK_EQ(in_shape->size(), param.no_bias? 6U : 9U);
+  CHECK_EQ(out_shape->size(), 3U);
   if (param.layout.has_value()) {
     CHECK_EQ(param.layout.value(), mshadow::kNCHW) << "quantized_conv only supports NCHW for now";
   }
@@ -56,10 +57,9 @@ bool QuantizedConvShape(const nnvm::NodeAttrs& attrs,
   oshape[H] = (AddPad(dshape[H], param.pad[0]) - wshape[H]) / param.stride[0] + 1;
   oshape[W] = (AddPad(dshape[W], param.pad[1]) - wshape[W]) / param.stride[1] + 1;
 
-  out_shape->clear();
-  out_shape->push_back(oshape);
-  out_shape->push_back(TShape{1});
-  out_shape->push_back(TShape{1});
+  SHAPE_ASSIGN_CHECK(*out_shape, 0, oshape);
+  SHAPE_ASSIGN_CHECK(*out_shape, 1, TShape({1}));
+  SHAPE_ASSIGN_CHECK(*out_shape, 2, TShape({1}));
   return true;
 }
 
@@ -68,6 +68,7 @@ bool QuantizedConvType(const nnvm::NodeAttrs& attrs,
                        std::vector<int> *out_type) {
   const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
   CHECK_EQ(in_type->size(), param.no_bias? 6U : 9U);
+  CHECK_EQ(out_type->size(), 3U);
   TYPE_ASSIGN_CHECK(*in_type, 0, mshadow::kInt8);
   TYPE_ASSIGN_CHECK(*in_type, 1, mshadow::kInt8);
   if (!param.no_bias) {
@@ -80,14 +81,21 @@ bool QuantizedConvType(const nnvm::NodeAttrs& attrs,
     TYPE_ASSIGN_CHECK(*in_type, i, mshadow::kFloat32);
   }
 
-  out_type->clear();
-  out_type->push_back(mshadow::kInt32);
-  out_type->push_back(mshadow::kFloat32);
-  out_type->push_back(mshadow::kFloat32);
+  TYPE_ASSIGN_CHECK(*out_type, 0, mshadow::kInt32);
+  TYPE_ASSIGN_CHECK(*out_type, 1, mshadow::kFloat32);
+  TYPE_ASSIGN_CHECK(*out_type, 2, mshadow::kFloat32);
   return true;
 }
 
 NNVM_REGISTER_OP(_contrib_quantized_conv)
+.describe(R"code(Convolution operator for input, weight and bias data type of int8,
+and accumulates in type int32 for the output. For each argument, two more arguments of type
+float32 must be provided representing the thresholds of quantizing argument from data
+type float32 to int8. The final outputs contain the convolution result in int32, and min
+and max thresholds representing the threholds for quantizing the float32 output into int32.
+
+.. Note::
+    This operator only supports forward propogation. DO NOT use it in training.)code" ADD_FILELINE)
 .set_num_inputs(
   [](const NodeAttrs& attrs) {
     const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);

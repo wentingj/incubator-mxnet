@@ -17,6 +17,7 @@ bool QuantizedFullyConnectedShape(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   uint32_t num_inputs = param.no_bias ? 2 : 3;
   CHECK_EQ(in_shape->size(), num_inputs * 3);
+  CHECK_EQ(out_shape->size(), 3U);
 
   CHECK(!shape_is_none(in_shape->at(0)))
     << "QuantizedFullyConnectedOp input data shape must be given";
@@ -32,10 +33,9 @@ bool QuantizedFullyConnectedShape(const nnvm::NodeAttrs& attrs,
     SHAPE_ASSIGN_CHECK(*in_shape, i, TShape{1});
   }
 
-  out_shape->clear();
-  out_shape->push_back(TShape{dshape[0], wshape[0]});
-  out_shape->push_back(TShape{1});
-  out_shape->push_back(TShape{1});
+  SHAPE_ASSIGN_CHECK(*out_shape, 0, TShape({dshape[0], wshape[0]}));
+  SHAPE_ASSIGN_CHECK(*out_shape, 1, TShape({1}));
+  SHAPE_ASSIGN_CHECK(*out_shape, 2, TShape({1}));
   return true;
 }
 
@@ -45,6 +45,7 @@ bool QuantizedFullyConnectedType(const nnvm::NodeAttrs& attrs,
   const FullyConnectedParam& param = nnvm::get<FullyConnectedParam>(attrs.parsed);
   uint32_t num_inputs = param.no_bias ? 2 : 3;
   CHECK_EQ(in_type->size(), num_inputs * 3);
+  CHECK_EQ(out_type->size(), 3U);
 
   for (size_t i = 0; i < num_inputs; ++i) {
     TYPE_ASSIGN_CHECK(*in_type, i, mshadow::kInt8);
@@ -53,14 +54,21 @@ bool QuantizedFullyConnectedType(const nnvm::NodeAttrs& attrs,
     TYPE_ASSIGN_CHECK(*in_type, i, mshadow::kFloat32);
   }
 
-  out_type->clear();
-  out_type->push_back(mshadow::kInt32);
-  out_type->push_back(mshadow::kFloat32);
-  out_type->push_back(mshadow::kFloat32);
+  TYPE_ASSIGN_CHECK(*out_type, 0, mshadow::kInt32);
+  TYPE_ASSIGN_CHECK(*out_type, 1, mshadow::kFloat32);
+  TYPE_ASSIGN_CHECK(*out_type, 2, mshadow::kFloat32);
   return true;
 }
 
 NNVM_REGISTER_OP(_contrib_quantized_fully_connected)
+.describe(R"code(Fully Connected operator for input, weight and bias data type of int8,
+and accumulates in type int32 for the output. For each argument, two more arguments of type
+float32 must be provided representing the thresholds of quantizing argument from data
+type float32 to int8. The final outputs contain the convolution result in int32, and min
+and max thresholds representing the threholds for quantizing the float32 output into int32.
+
+.. Note::
+    This operator only supports forward propogation. DO NOT use it in training.)code" ADD_FILELINE)
 .set_num_inputs(
   [](const NodeAttrs& attrs) {
     const FullyConnectedParam& param = nnvm::get<FullyConnectedParam>(attrs.parsed);

@@ -119,7 +119,7 @@ def test_quantized_conv():
 
             # run quantized conv
             qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='int8')
-            qweight = mx.sym.Variable(name='qweight')
+            qweight = mx.sym.Variable(name='qweight', dtype='int8')
             min_data = mx.sym.Variable(name='min_data')
             max_data = mx.sym.Variable(name='max_data')
             min_weight = mx.sym.Variable(name='min_weight')
@@ -129,8 +129,11 @@ def test_quantized_conv():
                                                              max_weight=max_weight, kernel=kernel,
                                                              num_filter=num_filter, pad=pad, stride=stride,
                                                              no_bias=no_bias)
-            conv_exe_int8 = quantized_conv2d.simple_bind(ctx=mx.current_context(), grad_req='null')
             qarg_names = quantized_conv2d.list_arguments()
+            type_dict = None
+            if not no_bias:
+                type_dict = {qarg_names[2]: 'int8'}
+            conv_exe_int8 = quantized_conv2d.simple_bind(ctx=mx.current_context(), type_dict=type_dict, grad_req='null')
             conv_exe_int8.arg_dict[qarg_names[0]][:] = conv_exe_fp32.arg_dict[arg_names[0]].astype('int8')
             conv_exe_int8.arg_dict[qarg_names[1]][:] = conv_exe_fp32.arg_dict[arg_names[1]].astype('int8')
             quantized_range = 127.0
@@ -228,8 +231,11 @@ def test_quantized_fc():
             qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='int8')
             fc_int8 = mx.sym.contrib.quantized_fully_connected(data=qdata, num_hidden=num_hidden,
                                                                no_bias=no_bias, flatten=flatten)
-            fc_int8_exe = fc_int8.simple_bind(ctx=mx.current_context(), grad_req='null')
             qarg_names = fc_int8.list_arguments()
+            type_dict = {qarg_names[1]: 'int8'}
+            if not no_bias:
+                type_dict.update({qarg_names[2]: 'int8'})
+            fc_int8_exe = fc_int8.simple_bind(ctx=mx.current_context(), type_dict=type_dict, grad_req='null')
             fc_int8_exe.arg_dict[qarg_names[0]][:] = fc_fp32_exe.arg_dict[arg_names[0]].astype('int8')
             fc_int8_exe.arg_dict[qarg_names[1]][:] = fc_fp32_exe.arg_dict[arg_names[1]].astype('int8')
             quantized_range = 127.0
@@ -315,12 +321,11 @@ def test_quantize_sym_with_calib():
                       if not name.startswith('data') and not name.endswith('label')]
     qsym = mx.quantization._quantize_symbol(sym, offline_params=offline_params)
     requantize_op_names = ['requantize_conv', 'requantize_fc']
-    th_dict = {'conv_output': (np.random.uniform(), np.random.uniform()),
-               'fc_output': (np.random.uniform(), np.random.uniform())}
+    th_dict = {'conv_output': (np.random.uniform(low=100.0, high=200.0), np.random.uniform(low=100.0, high=200.0)),
+               'fc_output': (np.random.uniform(low=100.0, high=200.0), np.random.uniform(low=100.0, high=200.0))}
     op_name_to_th_name = {'requantize_conv': 'conv_output', 'requantize_fc': 'fc_output'}
     cqsym = mx.quantization._calibrate_quantized_sym(qsym, th_dict)
     attr_dict = cqsym.attr_dict()
-    print(attr_dict)
     for name in requantize_op_names:
         assert name in attr_dict
         lhs = float(attr_dict[name]['min_calib_range'])
@@ -328,11 +333,11 @@ def test_quantize_sym_with_calib():
         assert_almost_equal(np.array([lhs]), np.array([rhs]))
         lhs = float(attr_dict[name]['max_calib_range'])
         rhs = th_dict[op_name_to_th_name[name]][1]
-        assert_almost_equal(np.array([lhs]), np.array([rhs]), rtol=1e-3, atol=1e-5)
+        assert_almost_equal(np.array([lhs]), np.array([rhs]), rtol=1e-3, atol=1e-4)
 
 
 def test_get_optimal_thresholds():
-    """Given a ndarray with elements following a uniform distribution,
+    """Given an ndarray with elements following a uniform distribution,
     the optimal threshold for quantizing the ndarray should be either
     abs(min(nd)) or abs(max(nd))."""
     def get_threshold(nd):
@@ -340,14 +345,13 @@ def test_get_optimal_thresholds():
         max_nd = mx.nd.max(nd)
         return mx.nd.maximum(mx.nd.abs(min_nd), mx.nd.abs(max_nd)).asnumpy()
 
-    nd_dict = {}
-    nd_dict['layer1'] = mx.nd.uniform(low=-10.532, high=11.3432, shape=(8, 3, 23, 23))
+    nd_dict = {'layer1': mx.nd.uniform(low=-10.532, high=11.3432, shape=(8, 3, 23, 23))}
+    expected_threshold = get_threshold(nd_dict['layer1'])
     th_dict = mx.quantization._get_optimal_thresholds(nd_dict)
     assert 'layer1' in th_dict
-    assert_almost_equal(np.array([th_dict['layer1'][1]]), get_threshold(nd_dict['layer1']))
+    assert_almost_equal(np.array([th_dict['layer1'][1]]), expected_threshold)
 
 
 if __name__ == "__main__":
-    set_default_context(mx.gpu(0))
     import nose
     nose.runmodule()

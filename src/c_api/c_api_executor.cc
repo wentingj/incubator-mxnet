@@ -272,7 +272,14 @@ int MXExecutorSimpleBind(SymbolHandle symbol_handle,
 
   // setup arg_dtype_map
   std::unordered_map<std::string, int> arg_dtype_map;
-  if (nullptr != provided_arg_dtypes) {  // use user input type_dict
+  if (nullptr == provided_arg_dtypes) {  // use attr_dict
+    for (const auto& arg_name : in_arg_names) {
+      const auto it = attr_dict.find(arg_name);
+      if (it == attr_dict.end() || !it->second.count("__dtype__")) {
+        arg_dtype_map[arg_name] = mshadow::kFloat32;
+      }
+    }
+  } else {  // use user input type_dict
     // create dtype map for in_args and aux_states
     arg_dtype_map.reserve(num_provided_arg_dtypes);
     for (mx_uint i = 0; i < num_provided_arg_dtypes; ++i) {
