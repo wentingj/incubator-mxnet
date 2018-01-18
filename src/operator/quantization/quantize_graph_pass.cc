@@ -268,13 +268,15 @@ Graph SetCalibTableToQuantizedGraph(Graph&& g) {
       auto list_output_names_func = flist_outputs.get(quantized_op_node->op(), nullptr);
       // Here it's assumed that the quantized_op node
       // only produces three outputs: out_data, min_range, and max_range.
-      // So we want to get the pre-calculated min_range and max_range
-      // from the calibration table for out_data. Confirm with Ziheng
-      // to see whether we want to support multiple data outputs.
+      // So we want to get the pre-calculated min_calib_range and max_calib_range
+      // from the calibration table for out_data.
       // Here we create the output data name same as its constructed
       // in GraphExecutor::ExecuteMonCallback.
       if (list_output_names_func != nullptr) {
-        out_data_name += (list_output_names_func(quantized_op_node->attrs))[0];
+        std::vector<std::string> names = list_output_names_func(quantized_op_node->attrs);
+        CHECK_EQ(names.size(), 3U) << "ListOutputNames is expected to return three string for"
+                                      " quantized operators";
+        out_data_name += names[0];
       } else {
         out_data_name += "0";
       }
