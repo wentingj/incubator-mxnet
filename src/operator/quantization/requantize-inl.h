@@ -19,8 +19,8 @@ namespace mxnet {
 namespace op {
 
 struct RequantizeParam : public dmlc::Parameter<RequantizeParam> {
-  dmlc::optional<float> min_calib_range;  // min float value calculated from calibration set
-  dmlc::optional<float> max_calib_range;  // max float value calculated from calibration set
+  dmlc::optional<float> min_calib_range;  // min float value calculated from calibration dataset
+  dmlc::optional<float> max_calib_range;  // max float value calculated from calibration dataset
   DMLC_DECLARE_PARAMETER(RequantizeParam) {
     DMLC_DECLARE_FIELD(min_calib_range)
     .set_default(dmlc::optional<float>())

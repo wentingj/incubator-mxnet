@@ -24,7 +24,14 @@ def _quantize_params(qsym, params):
     """Given a quantized symbol and a dict of params that have not been quantized, generate quantized params.
     Currently only supports quantizing the arg_params with names of `weight` or `bias`, not aux_params.
     If `qsym` contains symbols that are excluded from being quantized, their corresponding params will
-    not be quantized, but saved together with quantized params of the symbols that have been quantized."""
+    not be quantized, but saved together with quantized params of the symbols that have been quantized.
+
+    Parameters
+    ----------
+    qsym : Symbol
+        Quantized symbol from FP32 symbol.
+    params : dict of str->NDArray
+    """
     inputs_name = qsym.list_arguments()
     quantized_params = {}
     for name in inputs_name:
@@ -42,6 +49,18 @@ def _quantize_params(qsym, params):
 
 
 def _quantize_symbol(sym, excluded_symbols=None, offline_params=None):
+    """Given a symbol object representing a neural network of data type FP32, quantize it into a INT8 network.
+
+    Parameters
+    ----------
+    sym : Symbol
+        FP32 neural network symbol.
+    excluded_symbols : list of symbols
+        Nodes in the network that users do not want to replace with a symbol of INT8 data type.
+    offline_params : list of strs
+        Names of the parameters that users want to quantize offline. It's always recommended to quantize parameters
+        offline so that quantizing parameters during the inference can be avoided.
+    """
     num_excluded_symbols = 0
     excluded_handles = []
     if excluded_symbols is not None:
@@ -91,7 +110,8 @@ class _LayerOutputCollector(object):
 
 class _LayerOutputMinMaxCollector(object):
     """Saves layer output min and max values in a dict with layer names as keys.
-    The collected min and max values will be directly used as thresholds for quantization."""
+    The collected min and max values will be directly used as thresholds for quantization.
+    """
     def __init__(self, include_layer=None, logger=None):
         self.min_max_dict = {}
         self.include_layer = include_layer
@@ -114,6 +134,9 @@ class _LayerOutputMinMaxCollector(object):
 
 
 def _calibrate_quantized_sym(qsym, th_dict):
+    """Given a dictionary containing the thresholds for quantizing the layers, set the thresholds into
+    the quantized symbol as the params of requantize operators.
+    """
     if th_dict is None or len(th_dict) == 0:
         return qsym
     num_layer_outputs = len(th_dict)
@@ -152,22 +175,24 @@ def _collect_layer_statistics(mod, data, collector, max_num_examples=None, logge
 
 
 def _collect_layer_output_min_max(mod, data, include_layer=None, max_num_examples=None, logger=None):
+    """Collect min and max values from layer outputs and save them in a dictionary mapped by layer names."""
     collector = _LayerOutputMinMaxCollector(include_layer=include_layer, logger=logger)
     _collect_layer_statistics(mod, data, collector, max_num_examples, logger)
     return collector.min_max_dict
 
 
 def _collect_layer_outputs(mod, data, include_layer=None, max_num_examples=None, logger=None):
+    """Collect layer outputs and save them in a dictionary mapped by layer names."""
     collector = _LayerOutputCollector(include_layer=include_layer, logger=logger)
     _collect_layer_statistics(mod, data, collector, max_num_examples, logger)
     return collector.nd_dict
 
 
 def _smooth_distribution(p, eps=0.0001):
-    """Given a discrete distribution (might not have been normalized to 1),
-    smooth it by replacing zeros with eps and taking the corresponding amount
-    off the non-zero values.
-    Ref: http://web.engr.illinois.edu/~hanj/cs412/bk3/KL-divergence.pdf"""
+    """Given a discrete distribution (may have not been normalized to 1), smooth it by replacing zeros
+    with eps multiplied by a scaling factor and taking the corresponding amount off the non-zero values.
+    Ref: http://web.engr.illinois.edu/~hanj/cs412/bk3/KL-divergence.pdf
+    """
     is_zeros = (p == 0).astype(np.float32)
     is_nonzeros = (p != 0).astype(np.float32)
     n_zeros = is_zeros.sum()
@@ -182,7 +207,8 @@ def _smooth_distribution(p, eps=0.0001):
 
 def _get_optimal_threshold(arr, num_bins=8001, num_quantized_bins=255):
     """Given a dataset, find the optimal threshold for quantizing it.
-    Ref: http://on-demand.gputechconf.com/gtc/2017/presentation/s7310-8-bit-inference-with-tensorrt.pdf"""
+    Ref: http://on-demand.gputechconf.com/gtc/2017/presentation/s7310-8-bit-inference-with-tensorrt.pdf
+    """
     if isinstance(arr, NDArray):
         arr = arr.asnumpy()
     elif isinstance(arr, list):
@@ -287,6 +313,7 @@ def _get_optimal_thresholds(nd_dict, num_bins=8001, num_quantized_bins=255, logg
 
 
 def _load_sym(sym, logger=logging):
+    """Given a str as a path the symbol .json file or a symbol, returns a Symbol object."""
     if isinstance(sym, str):  # sym is a symbol file path
         cur_path = os.path.dirname(os.path.realpath(__file__))
         symbol_file_path = os.path.join(cur_path, sym)
@@ -300,6 +327,9 @@ def _load_sym(sym, logger=logging):
 
 
 def _load_params(params, logger=logging):
+    """Given a str as a path to the .params file or a pair of params,
+    returns two dictionaries representing arg_params and aux_params.
+    """
     if isinstance(params, str):
         cur_path = os.path.dirname(os.path.realpath(__file__))
         param_file_path = os.path.join(cur_path, params)
@@ -344,13 +374,28 @@ def get_quantized_model(sym, params, excluded_sym_names=None,
         A list of strings representing the names of the symbols that users want to excluding from being quantized.
     calib_mode : str
         If calib_mode='none', no calibration will be used and the thresholds for requantization after the corresponding
-        layers will be calculated on the fly by calling min and max operators. The quantized models generated in this
+        layers will be calculated at runtime by calling min and max operators. The quantized models generated in this
         mode are normally 10-20% slower than those with calibrations during inference.
-        If calib_mode='naive', the min and max values of the layer outputs from a calibration dataet will be directly
-        taken as thresholds for quantization.
+        If calib_mode='naive', the min and max values of the layer outputs from a calibration dataset will be directly
+        taken as the thresholds for quantization.
         If calib_mode='entropy' (default mode), the thresholds for quantization will be derived such that the KL
-        divergence between the distributions of FP32 layer outputs and quantized layer outputs is minimized from
-        a calibration dataset.
+        divergence between the distributions of FP32 layer outputs and quantized layer outputs is minimized based upon
+        the calibration dataset.
+    calib_data : DataIter
+        A data iterator initialized by the calibration dataset.
+    num_calib_examples : int or None
+        The maximum number of examples that user would like to use for calibration. If not provided, the whole
+        calibration dataset will be used.
+    calib_layer : function
+        Given a layer's output name in string, return True or False for deciding whether to calibrate this layer.
+        If yes, the statistics of the layer's output will be collected; otherwise, no information of the layer's
+        output will be collected. If not provided, all the layers' outputs that need requantization will be collected.
+    ctx : Context
+        Defines the device that users want to run forward propagation on the calibration dataset for collecting layer
+        output statistics. Currently, only supports single context.
+    label_name : str
+        Label name required for creating a Module object to run forward propagation on the calibration dataset.
+    logger : Object
     """
     sym = _load_sym(sym, logger)
     arg_params, aux_params = _load_params(params, logger)
