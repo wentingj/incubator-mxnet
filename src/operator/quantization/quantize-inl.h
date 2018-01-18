@@ -56,7 +56,6 @@ struct quantize_unsigned {
                                   const double min_limit, const double max_limit) {
     using mshadow::red::limits::MinValue;
     using mshadow::red::limits::MaxValue;
-    //const float scale = (MaxValue<DstDType>() - MinValue<DstDType>()) / (*imax_range - *imin_range);
     const float scale = (max_limit - min_limit) / (*imax_range - *imin_range);
     out[i] = static_cast<DstDType>((in[i] - *imin_range) * scale + 0.5);
     *omin_range = *imin_range;
