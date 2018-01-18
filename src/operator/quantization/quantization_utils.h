@@ -54,6 +54,7 @@ MSHADOW_XINLINE float MinAbs(T a, T b) {
   return Min(Abs(static_cast<float>(a)), Abs(static_cast<float>(b)));
 }
 
+#if 0
 template<typename T>
 MSHADOW_XINLINE float FloatToQuantizedUnclamped(float input, float min_range, float max_range) {
   using mshadow::red::limits::MinValue;
@@ -63,6 +64,7 @@ MSHADOW_XINLINE float FloatToQuantizedUnclamped(float input, float min_range, fl
   float scale = quantize_range / real_range;
   return Sign(input) * (Abs(input) * scale + 0.5f);
 }
+#endif
 
 template<typename T>
 MSHADOW_XINLINE T FloatToQuantized(float input, float min_range, float max_range) {
