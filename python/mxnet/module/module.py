@@ -792,7 +792,7 @@ class Module(BaseModule):
         assert self.binded
         self._exec_group.install_monitor(mon)
 
-    def set_monitor_callback(self, cb):
+    def _set_monitor_callback(self, cb):
         """Set monitor callback function to executor.
         Only supports the module with only one executor."""
         assert len(self._exec_group.execs) == 1, 'Module supports setting callback' \
