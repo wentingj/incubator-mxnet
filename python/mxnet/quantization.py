@@ -161,7 +161,7 @@ def _calibrate_quantized_sym(qsym, th_dict):
 def _collect_layer_statistics(mod, data, collector, max_num_examples=None, logger=None):
     if not isinstance(data, DataIter):
         raise ValueError('Only supports data as a type of DataIter, while received type %s' % str(type(data)))
-    mod.set_monitor_callback(collector.collect)
+    mod._set_monitor_callback(collector.collect)
     num_batches = 0
     num_examples = 0
     for batch in data:
