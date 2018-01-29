@@ -23,6 +23,9 @@
  * \brief
  */
 #include "./quantize-inl.h"
+#if MXNET_USE_MKLDNN == 1
+#include "./mkldnn/mkldnn_quantize-inl.h"
+#endif
 
 namespace mxnet {
 namespace op {
@@ -61,7 +64,11 @@ where
   })
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizeShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizeType)
+#if MXNET_USE_MKLDNN == 1
+.set_attr<FCompute>("FCompute<cpu>", MKLQuantizeCompute)
+#else
 .set_attr<FCompute>("FCompute<cpu>", QuantizeCompute<cpu>)
+#endif
 .add_argument("data", "NDArray-or-Symbol", "A ndarray/symbol of type `float32`")
 .add_argument("min_range", "NDArray-or-Symbol", "The minimum scalar value "
   "possibly produced for the input")
