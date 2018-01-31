@@ -23,6 +23,7 @@
 */
 #include <mxnet/op_attr_types.h>
 #include "../nn/pooling-inl.h"
+#include "./mkldnn/mkldnn_quantized_pooling-inl.h"
 
 namespace mxnet {
 namespace op {
@@ -91,6 +92,44 @@ bool QuantizedPoolingType(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+inline static bool QuantizedPoolingStorageType(const nnvm::NodeAttrs &attrs,
+                                      const int dev_mask,
+                                      DispatchMode *dispatch_mode,
+                                      std::vector<int> *in_attrs,
+                                      std::vector<int> *out_attrs) {
+  CHECK_EQ(in_attrs->size(), 3);
+
+  *dispatch_mode = DispatchMode::kFCompute;
+#if MXNET_USE_MKLDNN == 1
+  const PoolingParam &param = nnvm::get<PoolingParam>(attrs.parsed);
+  if (dev_mask == mshadow::cpu::kDevMask && SupportMKLDNNPooling(param)) {
+    *dispatch_mode = DispatchMode::kFComputeEx;
+  }
+#else
+  CHECK_EQ(out_attrs->size(), 3);
+#endif
+  for (size_t i = 0; i < out_attrs->size(); i++)
+    (*out_attrs)[i] = kDefaultStorage;
+  return true;
+}
+
+void QuantizedPoolingForwardCPU(const nnvm::NodeAttrs& attrs,
+                                const OpContext& ctx,
+                                const std::vector<NDArray>& inputs,
+                                const std::vector<OpReqType>& req,
+                                const std::vector<NDArray>& outputs) {
+  const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
+    Stream<cpu> *s = ctx.get_stream<cpu>();
+    Tensor<cpu, 1, float> omin_range = outputs[1].data().FlatTo1D<cpu, float>(s);
+    Tensor<cpu, 1, float> omax_range = outputs[2].data().FlatTo1D<cpu, float>(s);
+    omin_range = inputs[1].data().FlatTo1D<cpu, float>(s);
+    omax_range = inputs[2].data().FlatTo1D<cpu, float>(s);
+     
+#if MXNET_USE_MKLDNN == 1
+    MKLDNNQuantizedPoolingCompute(ctx, param, inputs[0], req[0], outputs[0]);
+#endif  // MXNET_USE_MKLDNN == 1
+}
+
 NNVM_REGISTER_OP(_contrib_quantized_pooling)
 .set_num_inputs(3)
 .set_num_outputs(3)
@@ -105,6 +144,7 @@ NNVM_REGISTER_OP(_contrib_quantized_pooling)
   })
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizedPoolingShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizedPoolingType)
+.set_attr<FInferStorageType>("FInferStorageType", QuantizedPoolingStorageType)
 .set_attr<FNeedRequantize>("FNeedRequantize",
   [](const NodeAttrs& attrs) {
     const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
@@ -112,6 +152,7 @@ NNVM_REGISTER_OP(_contrib_quantized_pooling)
       << "QuantizedPoolingOp only supports pool_type=max/avg for now";
     return false;
   })
+.set_attr<FComputeEx>("FComputeEx<cpu>", QuantizedPoolingForwardCPU)
 .add_argument("data", "NDArray-or-Symbol", "Input data.")
 .add_argument("min_data", "NDArray-or-Symbol", "Minimum value of data.")
 .add_argument("max_data", "NDArray-or-Symbol", "Maximum value of data.")
