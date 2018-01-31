@@ -225,6 +225,49 @@ def test_quantized_pooling():
     check_quantized_pooling((3, 512, 7, 7), (7, 7), 'avg', (0, 0), (1, 1), True)
 
 
+def test_quantized_pooling_cpu():
+    if mx.current_context().device_type != 'cpu':
+        return
+
+    def check_quantized_pooling(data_shape, kernel, pool_type, pad, stride, global_pool):
+        with mx.Context('cpu', 0):
+            data = mx.sym.Variable(name='data', shape=data_shape, dtype='float32')
+            pooling_fp32 = mx.sym.Pooling(data=data, kernel=kernel, pad=pad, stride=stride,
+                                          pool_type=pool_type, global_pool=global_pool, cudnn_off=False)
+            arg_shapes, _, _ = pooling_fp32.infer_shape(data=data_shape)
+            arg_names = pooling_fp32.list_arguments()
+            pooling_fp32_exe = pooling_fp32.simple_bind(ctx=mx.current_context(), grad_req='null')
+            pooling_fp32_exe.arg_dict[arg_names[0]][:] = mx.nd.random.uniform(low=-127.0, high=127.0,
+                                                                              shape=data_shape).astype('int32')
+            output = pooling_fp32_exe.forward()[0]
+
+            qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='int8')
+            min_data = mx.sym.Variable(name='min_data')
+            max_data = mx.sym.Variable(name='max_data')
+            quantized_pooling = mx.sym.contrib.quantized_pooling(data=qdata, min_data=min_data,
+                                                                 max_data=max_data, kernel=kernel,
+                                                                 pad=pad, stride=stride, pool_type=pool_type,
+                                                                 global_pool=global_pool)
+            pooling_int8_exe = quantized_pooling.simple_bind(ctx=mx.current_context(), grad_req='null')
+            qarg_names = quantized_pooling.list_arguments()
+            pooling_int8_exe.arg_dict[qarg_names[0]][:] = pooling_fp32_exe.arg_dict[arg_names[0]].astype('int8')
+            quantized_range = 127.0
+            pooling_int8_exe.arg_dict[qarg_names[1]][:] = -quantized_range
+            pooling_int8_exe.arg_dict[qarg_names[2]][:] = quantized_range
+            qoutput, min_range, max_range = pooling_int8_exe.forward()
+
+            if pool_type == 'max':
+                assert_almost_equal(output.asnumpy(), qoutput.asnumpy())
+            elif pool_type == 'avg':  # for avg pooling, fp32 and int8 may be different due to rounding errors
+                diff = mx.nd.abs(output - qoutput.astype(output.dtype))
+                cond = mx.nd.lesser(2, diff).sum().asscalar()
+                assert cond == 0
+
+    check_quantized_pooling((3, 4, 56, 56), (3, 3), 'max', (0, 0), (2, 2), False)
+    #check_quantized_pooling((3, 4, 56, 56), (3, 3), 'max', (0, 0), (2, 2), True)
+    check_quantized_pooling((3, 512, 7, 7), (7, 7), 'avg', (0, 0), (1, 1), False)
+    check_quantized_pooling((3, 512, 7, 7), (7, 7), 'avg', (0, 0), (1, 1), True)
+
 def test_quantized_fc():
     if mx.current_context().device_type != 'gpu':
         return
