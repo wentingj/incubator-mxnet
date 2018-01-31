@@ -119,6 +119,11 @@ void MKLDNNQuantized_conv2dForward(const nnvm::NodeAttrs& attrs,
                                    const std::vector<NDArray> &in_data,
                                    const std::vector<OpReqType> &req,
                                    const std::vector<NDArray> &out_data);
+void MKLDNNQuantizedActivationForward(const nnvm::NodeAttrs& attrs,
+                                      const OpContext &ctx,
+                                      const NDArray &in_data,
+                                      const OpReqType &req,
+                                      const NDArray &out_data);
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_USE_MKLDNN == 1
