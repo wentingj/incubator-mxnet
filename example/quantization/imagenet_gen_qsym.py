@@ -104,9 +104,22 @@ if __name__ == '__main__':
     if calib_mode != 'none':
         download_calib_dataset('http://data.mxnet.io/data/val_256_q90.rec', args.calib_dataset)
 
-    # download model
-    prefix, epoch = download_model(model_name=args.model, logger=logger)
-    sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)
+    if args.model == 'conv_mnist_mkl':
+        epoch = 10
+        data = mx.symbol.Variable('data')
+        conv1 = mx.symbol.Convolution(data=data, kernel=(5, 5),
+            num_filter=20, no_bias=True, pad=(0,0), stride=(1,1))
+        relu1 = mx.symbol.Activation(data=conv1, act_type="relu")
+        flatten = mx.symbol.flatten(data=relu1)
+        fc1 = mx.symbol.FullyConnected(data=flatten, num_hidden=epoch)
+        conv_net = mx.symbol.SoftmaxOutput(data=fc1, name='softmax')
+        sym = conv_net
+        prefix = "conv_mnist"
+        _, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)
+    else:
+        # download model
+        prefix, epoch = download_model(model_name=args.model, logger=logger)
+        sym, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)
 
     # get batch size
     batch_size = args.batch_size
@@ -138,6 +151,10 @@ if __name__ == '__main__':
                                                                      or name.find('fc') != -1)
         if exclude_first_conv:
             excluded_sym_names = ['conv_1']
+    elif args.model == 'conv_mnist_mkl':
+        rgb_mean = '0,0,0'
+        calib_layer = []
+         
     else:
         raise ValueError('model %s is not supported in this script' % args.model)
 
@@ -158,6 +175,13 @@ if __name__ == '__main__':
                                                             calib_mode=calib_mode, logger=logger)
         sym_name = '%s-symbol.json' % (prefix + '-quantized')
         save_symbol(sym_name, qsym, logger)
+        
+        graph = mx.viz.plot_network(sym)
+        graph.format = 'png'
+        graph.render('simple')
+        graph1 = mx.viz.plot_network(qsym)
+        graph1.format = 'png'
+        graph1.render('quantized_simple') 
     else:
         logger.info('Creating ImageRecordIter for reading calibration dataset')
         data = mx.io.ImageRecordIter(path_imgrec=args.calib_dataset,

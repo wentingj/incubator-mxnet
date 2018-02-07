@@ -152,6 +152,10 @@ void RequantizeForward(const nnvm::NodeAttrs& attrs,
         inputs[0].dptr<SrcDType>(), inputs[1].dptr<float>(), inputs[2].dptr<float>(),
         actual_min_float.dptr_, actual_max_float.dptr_);
   }
+  //float in_range = MaxAbs(*inputs[1].dptr<float>(), *inputs[2].dptr<float>());
+  //float out_range = MaxAbs(*outputs[1].dptr<float>(), *outputs[2].dptr<float>());
+  //std::cout<<"--MKLDeuantizeComputeKer: in_range="<<in_range<<std::endl;
+  //std::cout<<"--MKLDeuantizeComputeKer: out_range="<<out_range<<std::endl;
 }
 
 }  // namespace op

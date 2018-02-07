@@ -56,10 +56,12 @@ void MKLQuantizeComputeKer(const nnvm::NodeAttrs& attrs,
   tensor_shape.push_back(total_len);
 
   float real_range = MaxAbs(*inputs[1].dptr<float>(), *inputs[2].dptr<float>());
-  float quantized_range = MinAbs(MaxValue<DstType>(), MinValue<DstType>());
+  float quantized_range = MaxAbs(MaxValue<DstType>(), MinValue<DstType>());
   float scale = quantized_range / real_range;
   *outputs[1].dptr<float>() = -real_range;
   *outputs[2].dptr<float>() = real_range;
+  //std::cout<<"--MKLQuantizeComputeKer: real_range="<<real_range<<std::endl;
+  //std::cout<<"                       : quantized_range="<<quantized_range<<std::endl;
 
   primitive_attr attr;
   int mask = 0;
@@ -94,13 +96,23 @@ void MKLQuantizeCompute(const nnvm::NodeAttrs& attrs,
   const QuantizeParam& param = nnvm::get<QuantizeParam>(attrs.parsed);
 
   auto out_type = param.out_type;
-  CHECK_EQ(out_type, mshadow::kInt8);
-  MKLQuantizeComputeKer<float, int8_t>(attrs,
+  //CHECK_EQ(out_type, mshadow::kUint8);
+  if (param.out_type == mshadow::kUint8) {
+    MKLQuantizeComputeKer<float, uint8_t>(attrs,
                                        ctx,
                                        inputs,
                                        req,
                                        outputs
                                        );
+  }                                     
+  else { 
+    MKLQuantizeComputeKer<float, int8_t>(attrs,
+                                       ctx,
+                                       inputs,
+                                       req,
+                                       outputs
+                                       );
+  }                                       
 }
 }  // namespace op
 }  // namespace mxnet

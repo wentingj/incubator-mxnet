@@ -21,6 +21,7 @@ import time
 import os
 import logging
 from mxnet.quantization import *
+from sklearn.datasets import fetch_mldata
 
 
 def download_dataset(dataset_url, dataset_dir, logger=None):
@@ -64,6 +65,61 @@ def advance_data_iter(data_iter, n):
                 return data_iter
         except StopIteration:
             has_next_batch = False
+
+def score_conv_mnist(json_file, sym):
+    # prepare data
+    mnist = fetch_mldata('MNIST original')
+    np.random.seed(1234) # set seed for deterministic ordering
+    p = np.random.permutation(mnist.data.shape[0])
+    X = mnist.data[p].reshape(70000, 1, 28, 28)
+    #X = mnist.data[p].reshape(70000, 28, 28, 1)
+    pad = np.zeros(shape=(70000, 3, 28, 28))
+    #pad = np.zeros(shape=(70000, 28, 28, 3))
+    X = np.concatenate([X, pad], axis=1)
+    #X = np.concatenate([X, pad], axis=3)
+    Y = mnist.target[p]
+    
+    X = X.astype(np.uint8)/255
+    X_train = X[:60000]
+    X_test = X[60000:]
+    Y_train = Y[:60000]
+    Y_test = Y[60000:]
+    
+    train_iter = mx.io.NDArrayIter(X_train, Y_train, batch_size=batch_size)
+    val_iter = mx.io.NDArrayIter(X_test, Y_test, batch_size=batch_size)
+    test_iter = val_iter
+    # create a trainable module on GPU 0
+    model = mx.mod.Module(symbol=sym, context=mx.cpu(0))
+   
+    if (args.symbol_file == 'conv_mnist-symbol.json') :
+        _, arg_params, aux_params = mx.model.load_checkpoint("conv_mnist", 10)
+    else :
+        _, arg_params, aux_params = mx.model.load_checkpoint("conv_mnist-quantized", 10)
+    #print('arg_params=', arg_params)
+    model.bind(for_training=False, data_shapes=train_iter.provide_data, label_shapes=train_iter.provide_label)
+    print('after bind')
+    model.set_params(arg_params=arg_params, aux_params=aux_params)
+    print('after set_param')
+    
+    # predict accuracy for conv net
+    acc = mx.metric.Accuracy()
+    print('Accuracy: {}%'.format(model.score(test_iter, acc)[0][1]*100))
+    
+    #print(quantized_conv_net.debug_str())
+    params = model.get_params()[0]
+    # print(params['convolution0_weight'].asnumpy())
+    
+    print('before test')
+    test(sym, params, test_iter)
+    print('after test')
+
+
+def test(symbol, params, test_iter):
+    model = mx.model.FeedForward(
+        symbol,
+        ctx=mx.cpu(0),
+        arg_params=params)
+    print('Accuracy:', model.score(test_iter)*100, '%')
 
 
 def score(sym, arg_params, aux_params, data, devs, label_name, max_num_examples, logger=None):
@@ -137,39 +193,44 @@ if __name__ == '__main__':
     rgb_mean = [float(i) for i in rgb_mean.split(',')]
     mean_args = {'mean_r': rgb_mean[0], 'mean_g': rgb_mean[1], 'mean_b': rgb_mean[2]}
 
-    label_name = args.label_name
-    logger.info('label_name = %s' % label_name)
+    if ((args.symbol_file != 'conv_mnist-symbol.json') & (args.symbol_file != 'conv_mnist-quantized-symbol.json')) :
+        label_name = args.label_name
+        logger.info('label_name = %s' % label_name)
 
-    image_shape = args.image_shape
-    data_shape = tuple([int(i) for i in image_shape.split(',')])
-    logger.info('Input data shape = %s' % str(data_shape))
+        image_shape = args.image_shape
+        data_shape = tuple([int(i) for i in image_shape.split(',')])
+        logger.info('Input data shape = %s' % str(data_shape))
 
-    dataset = args.dataset
-    download_dataset('http://data.mxnet.io/data/val_256_q90.rec', dataset)
-    logger.info('Dataset for inference: %s' % dataset)
+        dataset = args.dataset
+        download_dataset('http://data.mxnet.io/data/val_256_q90.rec', dataset)
+        logger.info('Dataset for inference: %s' % dataset)
 
-    # creating data iterator
-    data = mx.io.ImageRecordIter(path_imgrec=dataset,
-                                 label_width=1,
-                                 preprocess_threads=data_nthreads,
-                                 batch_size=batch_size,
-                                 data_shape=data_shape,
-                                 label_name=label_name,
-                                 rand_crop=False,
-                                 rand_mirror=False,
-                                 shuffle=True,
-                                 shuffle_chunk_seed=3982304,
-                                 seed=48564309,
-                                 **mean_args)
+        # creating data iterator
+        data = mx.io.ImageRecordIter(path_imgrec=dataset,
+                                     label_width=1,
+                                     preprocess_threads=data_nthreads,
+                                     batch_size=batch_size,
+                                     data_shape=data_shape,
+                                     label_name=label_name,
+                                     rand_crop=False,
+                                     rand_mirror=False,
+                                     shuffle=True,
+                                     shuffle_chunk_seed=3982304,
+                                     seed=48564309,
+                                     **mean_args)
 
-    # loading model
-    sym, arg_params, aux_params = load_model(symbol_file, param_file, logger)
+        # loading model
+        sym, arg_params, aux_params = load_model(symbol_file, param_file, logger)
 
-    # make sure that fp32 inference works on the same images as calibrated quantized model
-    logger.info('Skipping the first %d batches' % args.num_skipped_batches)
-    data = advance_data_iter(data, args.num_skipped_batches)
+        # make sure that fp32 inference works on the same images as calibrated quantized model
+        logger.info('Skipping the first %d batches' % args.num_skipped_batches)
+        data = advance_data_iter(data, args.num_skipped_batches)
 
-    num_inference_images = args.num_inference_batches * batch_size
-    logger.info('Running model %s for inference' % symbol_file)
-    score(sym, arg_params, aux_params, data, [mx.gpu(0)], label_name,
-          max_num_examples=num_inference_images, logger=logger)
+        num_inference_images = args.num_inference_batches * batch_size
+        logger.info('Running model %s for inference' % symbol_file)
+        score(sym, arg_params, aux_params, data, [mx.gpu(0)], label_name,
+              max_num_examples=num_inference_images, logger=logger)
+    else:
+       # loading model
+       sym, arg_params, aux_params = load_model(symbol_file, param_file, logger)
+       score_conv_mnist(args.symbol_file, sym)

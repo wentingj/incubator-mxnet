@@ -112,7 +112,7 @@ and max thresholds representing the threholds for quantizing the float32 output 
   })
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizedFullyConnectedShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizedFullyConnectedType)
-.set_attr<FNeedRequantize>("FNeedRequantize", [](const NodeAttrs& attrs) { return true; })
+//.set_attr<FNeedRequantize>("FNeedRequantize", [](const NodeAttrs& attrs) { return true; })
 .add_argument("data", "NDArray-or-Symbol", "Input data.")
 .add_argument("weight", "NDArray-or-Symbol", "weight.")
 .add_argument("bias", "NDArray-or-Symbol", "bias.")
@@ -124,17 +124,17 @@ and max thresholds representing the threholds for quantizing the float32 output 
 .add_argument("max_bias", "NDArray-or-Symbol", "Maximum value of bias.")
 .add_arguments(FullyConnectedParam::__FIELDS__());
 
-NNVM_REGISTER_OP(FullyConnected)
-.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
-    nnvm::NodePtr node = nnvm::Node::Create();
-    node->attrs.op = Op::Get("_contrib_quantized_fully_connected");
-    node->attrs.name = "quantized_" + attrs.name;
-    node->attrs.dict = attrs.dict;
-    if (node->op()->attr_parser != nullptr) {
-      node->op()->attr_parser(&(node->attrs));
-    }
-    return node;
-  });
+//NNVM_REGISTER_OP(FullyConnected)
+//.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
+//    nnvm::NodePtr node = nnvm::Node::Create();
+//    node->attrs.op = Op::Get("_contrib_quantized_fully_connected");
+//    node->attrs.name = "quantized_" + attrs.name;
+//    node->attrs.dict = attrs.dict;
+//    if (node->op()->attr_parser != nullptr) {
+//      node->op()->attr_parser(&(node->attrs));
+//    }
+//    return node;
+//  });
 
 }  // namespace op
 }  // namespace mxnet
