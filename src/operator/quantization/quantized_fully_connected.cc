@@ -124,17 +124,19 @@ and max thresholds representing the threholds for quantizing the float32 output 
 .add_argument("max_bias", "NDArray-or-Symbol", "Maximum value of bias.")
 .add_arguments(FullyConnectedParam::__FIELDS__());
 
-//NNVM_REGISTER_OP(FullyConnected)
-//.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
-//    nnvm::NodePtr node = nnvm::Node::Create();
-//    node->attrs.op = Op::Get("_contrib_quantized_fully_connected");
-//    node->attrs.name = "quantized_" + attrs.name;
-//    node->attrs.dict = attrs.dict;
-//    if (node->op()->attr_parser != nullptr) {
-//      node->op()->attr_parser(&(node->attrs));
-//    }
-//    return node;
-//  });
+#if MXNET_USE_MKLDNN != 1
+NNVM_REGISTER_OP(FullyConnected)
+.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
+    nnvm::NodePtr node = nnvm::Node::Create();
+    node->attrs.op = Op::Get("_contrib_quantized_fully_connected");
+    node->attrs.name = "quantized_" + attrs.name;
+    node->attrs.dict = attrs.dict;
+    if (node->op()->attr_parser != nullptr) {
+      node->op()->attr_parser(&(node->attrs));
+    }
+    return node;
+  });
+#endif
 
 }  // namespace op
 }  // namespace mxnet
