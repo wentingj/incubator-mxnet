@@ -31,9 +31,20 @@
 #include <vector>
 #include <mxnet/operator_util.h>
 #include "../mshadow_op.h"
+#include "./quantization_utils.h"
+#include "../tensor/matrix_op-inl.h"
 
 namespace mxnet {
 namespace op {
+
+struct quantized_act {
+  MSHADOW_XINLINE static void Map(int i, float *omin_range, float *omax_range,
+                                  const float *imin_range, 
+                                  const float *imax_range) {
+    omin_range[0] = imin_range[0];
+    omax_range[0] = imax_range[0];
+  }
+};
 
 bool QuantizedActivationShape(const nnvm::NodeAttrs& attrs,
                               std::vector<TShape>* in_shape,
@@ -99,6 +110,14 @@ void QuantizedActivationComputeCPU(const nnvm::NodeAttrs& attrs,
 #if MXNET_USE_MKLDNN == 1
   MKLDNNQuantizedActivationForward(attrs, ctx, inputs[0], req[0], outputs[0]);
 #endif
+  using namespace mshadow;
+  using namespace mxnet_op;
+  Stream<cpu> *s = ctx.get_stream<cpu>();
+  typedef int8_t DstDType;
+  typedef int8_t  SrcDType;
+  Kernel<quantized_act, cpu>::Launch(s, 1, 
+         outputs[1].data().dptr<float>(), outputs[2].data().dptr<float>(),
+         inputs[1].data().dptr<float>(), inputs[2].data().dptr<float>());
 }
 
 NNVM_REGISTER_OP(_contrib_quantized_activation)

@@ -24,6 +24,8 @@
 #include "../../nn/convolution-inl.h"
 #include "../../nn/mkldnn/mkldnn_ops-inl.h"
 #include "../../nn/mkldnn/mkldnn_base-inl.h"
+#include "../quantization_utils.h"
+#include "../../tensor/matrix_op-inl.h"
 
 #if MXNET_USE_MKLDNN == 1
 namespace mxnet {
@@ -182,6 +184,7 @@ void MKLDNNQuantized_conv2dForward(const nnvm::NodeAttrs& attrs, const OpContext
                                const std::vector<NDArray> &in_data,
                                const std::vector<OpReqType> &req,
                                const std::vector<NDArray> &out_data) {
+  Stream<cpu> *s = ctx.get_stream<cpu>();
   TmpMemMgr::Get()->Init(ctx.requested[conv::kTempSpace]);
   const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
   MKLDNNConvForward &fwd = GetConvFwd(attrs,
@@ -201,6 +204,13 @@ void MKLDNNQuantized_conv2dForward(const nnvm::NodeAttrs& attrs, const OpContext
 
   CommitOutput(out_data[conv::kOut], out_mem);
   MKLDNNStream::Get()->Submit();
+  const size_t num_inputs = param.no_bias ? 2 : 3;
+  mxnet_op::Kernel<QuantizationRangeForMultiplicationStruct, cpu>::Launch(s, 1,
+           out_data[1].data().dptr<float>(), out_data[2].data().dptr<float>(),
+           in_data[num_inputs].data().dptr<float>(),
+           in_data[num_inputs+1].data().dptr<float>(),
+           in_data[num_inputs+2].data().dptr<float>(),
+           in_data[num_inputs+3].data().dptr<float>());
 }
 
 }  // namespace op
