@@ -90,8 +90,8 @@ bool QuantizedConvType(const nnvm::NodeAttrs& attrs,
   const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
   CHECK_EQ(in_type->size(), param.no_bias? 6U : 9U);
   CHECK_EQ(out_type->size(), 3U);
-  //TYPE_ASSIGN_CHECK(*in_type, 0, mshadow::kInt8);
-  TYPE_ASSIGN_CHECK(*in_type, 0, mshadow::kUint8);
+  TYPE_ASSIGN_CHECK(*in_type, 0, mshadow::kInt8);
+  //TYPE_ASSIGN_CHECK(*in_type, 0, mshadow::kUint8);
   TYPE_ASSIGN_CHECK(*in_type, 1, mshadow::kInt8);
   if (!param.no_bias) {
     TYPE_ASSIGN_CHECK(*in_type, 2, mshadow::kInt8);
