@@ -23,10 +23,20 @@
 */
 #include <mxnet/op_attr_types.h>
 #include "../nn/pooling-inl.h"
+#if MXNET_USE_MKLDNN == 1
 #include "./mkldnn/mkldnn_quantized_pooling-inl.h"
+#endif
 
 namespace mxnet {
 namespace op {
+struct quantized_pooling {
+  MSHADOW_XINLINE static void Map(int i, float *omin_range, float *omax_range,
+                                  const float *imin_range, 
+                                  const float *imax_range) {
+    omin_range[0] = imin_range[0];
+    omax_range[0] = imax_range[0];
+  }
+};
 
 bool QuantizedPoolingShape(const nnvm::NodeAttrs& attrs,
                            std::vector<TShape> *in_shape,
@@ -118,12 +128,12 @@ void QuantizedPoolingForwardCPU(const nnvm::NodeAttrs& attrs,
                                 const std::vector<NDArray>& inputs,
                                 const std::vector<OpReqType>& req,
                                 const std::vector<NDArray>& outputs) {
+  using namespace mxnet_op;
   const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
-    Stream<cpu> *s = ctx.get_stream<cpu>();
-    Tensor<cpu, 1, float> omin_range = outputs[1].data().FlatTo1D<cpu, float>(s);
-    Tensor<cpu, 1, float> omax_range = outputs[2].data().FlatTo1D<cpu, float>(s);
-    omin_range = inputs[1].data().FlatTo1D<cpu, float>(s);
-    omax_range = inputs[2].data().FlatTo1D<cpu, float>(s);
+  Stream<cpu> *s = ctx.get_stream<cpu>();
+  Kernel<quantized_pooling, cpu>::Launch(s, 1, 
+         outputs[1].data().dptr<float>(), outputs[2].data().dptr<float>(),
+         inputs[1].data().dptr<float>(), inputs[2].data().dptr<float>());
      
 #if MXNET_USE_MKLDNN == 1
     MKLDNNQuantizedPoolingCompute(ctx, param, inputs[0], req[0], outputs[0]);
