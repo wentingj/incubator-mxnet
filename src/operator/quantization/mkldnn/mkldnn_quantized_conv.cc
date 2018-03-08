@@ -37,12 +37,12 @@ static mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
     const NDArray &weights, const NDArray *bias, const NDArray &output) {
   auto prop = is_train ? mkldnn::prop_kind::forward_training : mkldnn::prop_kind::forward_scoring;
   
-  mkldnn::memory::dims dims(data.shape().ndim());
-  for (size_t i = 0; i < dims.size(); i++) dims[i] = data.shape()[i];
-  auto data_md = mkldnn::memory::desc{dims, 
-                                      (mkldnn::memory::data_type)data_type_enum<uint8_t>::type,
-                                      mkldnn::memory::format::any};
-  //auto data_md = GetMemDesc(data);
+  //mkldnn::memory::dims dims(data.shape().ndim());
+  //for (size_t i = 0; i < dims.size(); i++) dims[i] = data.shape()[i];
+  //auto data_md = mkldnn::memory::desc{dims, 
+  //                                    (mkldnn::memory::data_type)data_type_enum<uint8_t>::type,
+  //                                    mkldnn::memory::format::any};
+  auto data_md = GetMemDesc(data);
   
   auto weight_md = GetWeightDesc(weights, param.num_group);
   auto out_md = GetMemDesc(output);
@@ -230,15 +230,15 @@ void MKLDNNQuantized_conv2dForward(const nnvm::NodeAttrs& attrs, const OpContext
   
   TmpMemMgr::Get()->Init(ctx.requested[conv::kTempSpace]);
   const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
-
   //auto in_mem = in_data[conv::kData].GetMKLDNNDataReorder(fwd.fwd_pd.src_primitive_desc());
   //auto in_mem = in_data[conv::kData].GetMKLDNNData();
-  auto data_mem = MKLDNNReoder(in_data[conv::kData]);//, *in_mem); 
+  //auto data_mem = MKLDNNReoder(in_data[conv::kData]);//, *in_mem); 
  
   MKLDNNConvForward &fwd = GetConvFwd(attrs,
       ctx.is_train, in_data[0], in_data[conv::kWeight],
       param.no_bias ? nullptr : &in_data[conv::kBias], out_data[conv::kOut]);
   
+  auto data_mem = in_data[conv::kData].GetMKLDNNDataReorder(fwd.fwd_pd.src_primitive_desc()); 
   //auto data_mem = ret.GetMKLDNNDataReorder(fwd.fwd_pd.src_primitive_desc());
   auto weight_mem = GetWeights(in_data[conv::kWeight], fwd.fwd_pd.weights_primitive_desc(),
                                param.num_group);

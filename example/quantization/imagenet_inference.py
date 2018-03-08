@@ -73,10 +73,13 @@ def score_conv_mnist(json_file, sym):
     p = np.random.permutation(mnist.data.shape[0])
     X = mnist.data[p].reshape(70000, 1, 28, 28)
     #X = mnist.data[p].reshape(70000, 28, 28, 1)
-    pad = np.zeros(shape=(70000, 3, 28, 28))
+    #X = mnist.data[p].reshape(70000, 4, 7, 28)
+    pad = np.zeros(shape=(70000, 15, 28, 28))
     #pad = np.zeros(shape=(70000, 28, 28, 3))
+    #pad = np.zeros(shape=(70000, 12, 7, 28))
     X = np.concatenate([X, pad], axis=1)
     #X = np.concatenate([X, pad], axis=3)
+    #X = np.concatenate([X, pad], axis=1)
     Y = mnist.target[p]
     
     X = X.astype(np.uint8)/255
@@ -228,7 +231,7 @@ if __name__ == '__main__':
 
         num_inference_images = args.num_inference_batches * batch_size
         logger.info('Running model %s for inference' % symbol_file)
-        score(sym, arg_params, aux_params, data, [mx.gpu(0)], label_name,
+        score(sym, arg_params, aux_params, data, [mx.cpu()], label_name,
               max_num_examples=num_inference_images, logger=logger)
     else:
        # loading model

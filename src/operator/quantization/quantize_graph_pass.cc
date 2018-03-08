@@ -94,7 +94,65 @@ inline bool NeedQuantize(NodePtr node, const std::unordered_set<NodePtr> exclude
   return quantized_op_map.count(node->op()) && !excluded_nodes.count(node);
 }
 
+Graph FusionGraphImpl(Graph &src) {
+  DFSVisit(src.outputs, [&](const NodePtr& node) {
+    //change conv->relu->node to convRelu->node 
+    for (const auto& e : node->inputs) {
+      //find relu->node
+      if (e.node->op() != nullptr && e.node->op()->name == "Activation") {
+        for (const auto& e_second_layer : e.node->inputs) {
+          //find conv->relu->node
+          if (e_second_layer.node->op() != nullptr
+            && e_second_layer.node->op()->name == "Convolution") {
+            std::string conv_node_name = e_second_layer.node->attrs.name;
+            std::string conv_relu_node_name = conv_node_name.replace(\
+              conv_node_name.find("convolution"), strlen("convolution"), "convolutionRelu");
+            NodePtr conv_relu_node = CreateNode("ConvolutionRelu", conv_relu_node_name);
+            NodeEntry conv_entry = NodeEntry{ conv_relu_node, 0, 0 };
+            //copy para
+            conv_relu_node->attrs.dict = e_second_layer.node->attrs.dict;
+
+            //now we only support relu as act_type
+            if (e.node->attrs.dict["act_type"] != "relu")
+            {
+              std::cout << "Warning: Activation " << e.node->attrs.dict["act_type"]
+                << "is not supported for ConvRelu! Use relu instead" << std::endl;
+            }
+
+            conv_relu_node->op()->attr_parser(&(conv_relu_node->attrs));
+
+            //copy nodeEntry from conv's inputs to convRelu's inputs
+            for (const auto& conv_input_nodeEntry : e_second_layer.node->inputs) {
+              conv_relu_node->inputs.emplace_back(conv_input_nodeEntry);
+            }
+
+            //clear conv node
+            e_second_layer.node->inputs.clear();
+            e_second_layer.node->control_deps.clear();
+
+            //clear relu node
+            e.node->inputs.clear();
+            e.node->control_deps.clear();
+
+            //add convRelu entry to node's inputs
+            node->inputs.pop_back();
+            node->inputs.emplace_back(conv_entry);
+
+          }
+        }
+      }
+    }
+  });
+  return src;
+}
+
+Graph FusionGraph(Graph &&src) {
+  return FusionGraphImpl(src);
+}
+
 Graph QuantizeGraph(Graph &&src) {
+  return FusionGraphImpl(src);
+#if 0 
   static auto& quantized_op_map = Op::GetAttr<mxnet::FQuantizedOp>("FQuantizedOp");
   static auto& need_requantize_map = Op::GetAttr<mxnet::FNeedRequantize>("FNeedRequantize");
   auto offline_params = src.GetAttr<std::unordered_set<std::string>>("offline_params");
@@ -266,6 +324,7 @@ Graph QuantizeGraph(Graph &&src) {
   Graph ret;
   ret.outputs = std::move(outputs);
   return ret;
+#endif  
 }
 
 Graph SetCalibTableToQuantizedGraph(Graph&& g) {
@@ -326,3 +385,4 @@ NNVM_REGISTER_PASS(SetCalibTableToQuantizedGraph)
 
 }  // namespace op
 }  // namespace mxnet
+
