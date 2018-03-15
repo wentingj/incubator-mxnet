@@ -222,6 +222,8 @@ Graph QuantizeGraph(Graph &&src) {
         NodeEntry mirror_entry = NodeEntry{
           mirror_node, e.index, e.version};
         size_t num_outputs = e.node->num_outputs();
+        //(TODO) wenting: max pooling has 2 outputs for workspace, which is not used in inference, will change
+        num_outputs = 1;
         uint32_t min_index = num_outputs + 2 * e.index;
         uint32_t max_index = num_outputs + 2 * e.index + 1;
 

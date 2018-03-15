@@ -145,7 +145,7 @@ if __name__ == '__main__':
                                                                      or name.find('sc') != -1
                                                                      or name.find('fc') != -1)
         if exclude_first_conv:
-            excluded_sym_names = ['conv0', 'stage1_unit1_conv1', 'stage1_unit1_conv2', 'stage1_unit1_conv3', 'stage1_unit1_sc']
+            excluded_sym_names = ['conv0']
     elif args.model == 'imagenet1k-inception-bn':
         rgb_mean = '123.68,116.779,103.939'
         calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
