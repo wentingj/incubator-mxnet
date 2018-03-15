@@ -135,7 +135,7 @@ class _LayerOutputMinMaxCollector(object):
         self.logger = logger
 
     def collect(self, name, ndarray):
-        if self.include_layer is not None and not self.include_layer(name):
+        if self.include_layer is not None and not self.include_layer[name]:
             return
         handle = ctypes.cast(ndarray, NDArrayHandle)
         ndarray = NDArray(handle, writable=False)
@@ -160,10 +160,13 @@ def _calibrate_quantized_sym(qsym, th_dict):
     layer_output_names = []
     min_vals = []
     max_vals = []
+    print("in _calibrate_quantized_sym")
     for k, v in th_dict.items():
         layer_output_names.append(k)
         min_vals.append(v[0])
         max_vals.append(v[1])
+        print("_calibrate_quantized_sym: min", v[0])
+        print("_calibrate_quantized_sym: max", v[1])
 
     calibrated_sym = SymbolHandle()
     check_call(_LIB.MXSetCalibTableToQuantizedSymbol(qsym.handle,
@@ -435,6 +438,7 @@ def get_quantized_model(sym, params, excluded_sym_names=None,
     qarg_params = _quantize_params(qsym, arg_params)
 
     if calib_mode is not None and calib_mode != 'none':
+        print("calib_mode is not None and calib_mode != 'none'")
         if not isinstance(ctx, Context):
             raise ValueError('currently only supports single ctx, while received %s' % str(ctx))
         if calib_data is None:
@@ -444,6 +448,7 @@ def get_quantized_model(sym, params, excluded_sym_names=None,
                              ' while received type %s' % (calib_mode, str(type(calib_data))))
         if calib_layer is None:
             calib_layer = lambda name: name.endswith('_output')
+            print("calib_layer=", calib_layer)
 
         mod = Module(symbol=sym, context=ctx, label_names=[label_name,])
         mod.bind(for_training=False, data_shapes=calib_data.provide_data, label_shapes=calib_data.provide_label)

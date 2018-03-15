@@ -113,7 +113,11 @@ Graph QuantizeGraph(Graph &&src) {
     // insert a quantize op node before the current node
     // and replace the current node with the quantized version
     // in the new graph.
+    static int count1 = 0;
+    static int count2 = 0;
+    //if (NeedQuantize(node, excluded_nodes) && count1 < 4) {
     if (NeedQuantize(node, excluded_nodes)) {
+      //count1 ++;
       auto fquantized_op = quantized_op_map[node->op()];
       // If the currently visited node's op registered
       // FQuantizedOp property, new_node is a quantizated
@@ -138,11 +142,11 @@ Graph QuantizeGraph(Graph &&src) {
              mirror_node->op()->name != "_contrib_quantize")) {
           NodePtr quantize_node = InsertNode("_contrib_quantize",
             e.node->attrs.name + "_quantize", new_node, mirror_entry);
-          if (node->op()->name.find("Convolution") != std::string::npos) { 
-            quantize_node->attrs.dict["out_type"] = "uint8";
-          } else {
-            quantize_node->attrs.dict["out_type"] = "int8";
-          }
+          //if (node->op()->name.find("Convolution") != std::string::npos) { 
+          //  quantize_node->attrs.dict["out_type"] = "uint8";
+          //} else {
+          quantize_node->attrs.dict["out_type"] = "uint8";
+          //}
           quantize_node->op()->attr_parser(&(quantize_node->attrs));
 
           NodePtr min_node = InsertNode("min",
@@ -174,9 +178,10 @@ Graph QuantizeGraph(Graph &&src) {
         uint32_t min_index = 1;
         uint32_t max_index = 2;
         if (quantized_op_map.count(e.node->op())) {
-          size_t  num_outputs = e.node->num_outputs();
-          min_index = num_outputs + 2 * e.index;
-          max_index = num_outputs + 2 * e.index + 1;
+          //(TODO) wenting: max pooling has 2 outputs for workspace, which is not used in inference, will change
+          ////size_t  num_outputs = e.node->num_outputs();
+          //min_index = num_outputs + 2 * e.index;
+          //max_index = num_outputs + 2 * e.index + 1;
         } else {
           CHECK(mirror_node->op()->name == "_contrib_quantize")
             << "The input is not quantize or quantized_op";
@@ -221,7 +226,9 @@ Graph QuantizeGraph(Graph &&src) {
         uint32_t max_index = num_outputs + 2 * e.index + 1;
 
         // if input node is quantized operator, add dequantize node
+        //if (NeedQuantize(e.node, excluded_nodes) && count2 < 3) {
         if (NeedQuantize(e.node, excluded_nodes)) {
+          //count2++;
           NodePtr dequantize_node = CreateNode("_contrib_dequantize",
             e.node->attrs.name + "_dequantize");
           dequantize_node->inputs.emplace_back(mirror_entry);
@@ -275,6 +282,12 @@ Graph SetCalibTableToQuantizedGraph(Graph&& g) {
     nnvm::Op::GetAttr<mxnet::FNeedRequantize>("FNeedRequantize");
   const auto& calib_table =
     g.GetAttr<std::unordered_map<std::string, std::pair<float, float>>>("calib_table");
+  std::unordered_map<std::string, std::pair<float, float>>::const_iterator itr;
+  std::cout<<"--------in SetCalibTableToQuantizedGraph"<<std::endl;
+  for (itr = calib_table.begin(); itr != calib_table.end(); itr ++) {
+    //std::cout<<itr->first<<" "<<itr->second<<std::endl;
+    std::cout<<itr->first<<std::endl;
+  }
   DFSVisit(g.outputs, [&](const NodePtr& node) {
     // If the current op is requantize
     // find the thresholds from the calibration table with the key equal
@@ -299,12 +312,14 @@ Graph SetCalibTableToQuantizedGraph(Graph&& g) {
         std::vector<std::string> names = list_output_names_func(quantized_op_node->attrs);
         CHECK_EQ(names.size(), 3U) << "ListOutputNames is expected to return three string for"
                                       " quantized operators";
-        out_data_name += names[0];
+        //out_data_name += names[0];
+        out_data_name += "0";
       } else {
         out_data_name += "0";
       }
       const auto calib_table_iter = calib_table.find(out_data_name);
       if (calib_table_iter != calib_table.end()) {
+        std::cout<<"--------in calib_table_iter != calib_table.end()"<<std::endl;
         node->attrs.dict["min_calib_range"] = std::to_string(calib_table_iter->second.first);
         node->attrs.dict["max_calib_range"] = std::to_string(calib_table_iter->second.second);
         node->op()->attr_parser(&(node->attrs));

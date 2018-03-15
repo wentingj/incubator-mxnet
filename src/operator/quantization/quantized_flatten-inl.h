@@ -96,10 +96,12 @@ inline bool QuantizedFlattenType(const nnvm::NodeAttrs& attrs,
                                  std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), 3U);
   CHECK_EQ(out_attrs->size(), 3U);
-  TYPE_ASSIGN_CHECK(*in_attrs, 0, mshadow::kInt8);
+  //TYPE_ASSIGN_CHECK(*in_attrs, 0, mshadow::kInt8);
+  TYPE_ASSIGN_CHECK(*in_attrs, 0, mshadow::kUint8);
   TYPE_ASSIGN_CHECK(*in_attrs, 1, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*in_attrs, 2, mshadow::kFloat32);
-  TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kInt8);
+  //TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kInt8);
+  TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kUint8);
   TYPE_ASSIGN_CHECK(*out_attrs, 1, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*out_attrs, 2, mshadow::kFloat32);
   return (*in_attrs)[0] != -1;

@@ -142,17 +142,17 @@ NNVM_REGISTER_OP(_contrib_quantized_activation)
 .add_argument("min_data", "NDArray-or-Symbol", "")
 .add_argument("max_data", "NDArray-or-Symbol", "");
 
-NNVM_REGISTER_OP(Activation)
-.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
-    nnvm::NodePtr node = nnvm::Node::Create();
-    node->attrs.op = Op::Get("_contrib_quantized_activation");
-    node->attrs.name = "quantized_" + attrs.name;
-    node->attrs.dict = attrs.dict;
-    if (node->op()->attr_parser != nullptr) {
-      node->op()->attr_parser(&(node->attrs));
-    }
-    return node;
-  });
+//NNVM_REGISTER_OP(Activation)
+//.set_attr<FQuantizedOp>("FQuantizedOp", [](const NodeAttrs& attrs) {
+//    nnvm::NodePtr node = nnvm::Node::Create();
+//    node->attrs.op = Op::Get("_contrib_quantized_activation");
+//    node->attrs.name = "quantized_" + attrs.name;
+//    node->attrs.dict = attrs.dict;
+//    if (node->op()->attr_parser != nullptr) {
+//      node->op()->attr_parser(&(node->attrs));
+//    }
+//    return node;
+//  });
 
 }  // namespace op
 }  // namespace mxnet

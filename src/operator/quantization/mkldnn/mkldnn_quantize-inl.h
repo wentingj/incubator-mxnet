@@ -69,6 +69,7 @@ void MKLQuantizeComputeUnsigned(const nnvm::NodeAttrs& attrs,
   //std::cout<<"                       : inputs[1]="<<inputs[1].dptr<float>()[0]<<std::endl;
   //std::cout<<"                       : inputs[2]="<<inputs[2].dptr<float>()[0]<<std::endl;
   //std::cout<<"                       : quantized_range="<<quantized_range<<std::endl;
+  //std::cout<<"                       : real_range="<<real_range<<std::endl;
 
   primitive_attr attr;
   int mask = 0;

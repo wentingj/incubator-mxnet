@@ -19,6 +19,7 @@ import argparse
 from common import modelzoo
 import mxnet as mx
 from mxnet.quantization import *
+#from sklearn.datasets import fetch_mldata
 
 
 def download_calib_dataset(dataset_url, calib_dataset, logger=None):
@@ -108,7 +109,7 @@ if __name__ == '__main__':
         epoch = 10
         data = mx.symbol.Variable('data')
         conv1 = mx.symbol.Convolution(data=data, kernel=(5, 5),
-            num_filter=20, no_bias=True, pad=(0,0), stride=(1,1))
+            num_filter=16, no_bias=True, pad=(0,0), stride=(1,1))
         relu1 = mx.symbol.Activation(data=conv1, act_type="relu")
         flatten = mx.symbol.flatten(data=relu1)
         fc1 = mx.symbol.FullyConnected(data=flatten, num_hidden=epoch)
@@ -144,7 +145,7 @@ if __name__ == '__main__':
                                                                      or name.find('sc') != -1
                                                                      or name.find('fc') != -1)
         if exclude_first_conv:
-            excluded_sym_names = ['conv0']
+            excluded_sym_names = ['conv0', 'stage1_unit1_conv1', 'stage1_unit1_conv2', 'stage1_unit1_conv3', 'stage1_unit1_sc']
     elif args.model == 'imagenet1k-inception-bn':
         rgb_mean = '123.68,116.779,103.939'
         calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
@@ -174,6 +175,7 @@ if __name__ == '__main__':
                                                             excluded_sym_names=excluded_sym_names,
                                                             calib_mode=calib_mode, logger=logger)
         sym_name = '%s-symbol.json' % (prefix + '-quantized')
+        print(qsym)
         save_symbol(sym_name, qsym, logger)
         
         graph = mx.viz.plot_network(sym)
@@ -181,7 +183,7 @@ if __name__ == '__main__':
         graph.render('simple')
         graph1 = mx.viz.plot_network(qsym)
         graph1.format = 'png'
-        graph1.render('quantized_simple') 
+        graph1.render('quantized') 
     else:
         logger.info('Creating ImageRecordIter for reading calibration dataset')
         data = mx.io.ImageRecordIter(path_imgrec=args.calib_dataset,
@@ -196,12 +198,34 @@ if __name__ == '__main__':
                                      shuffle_chunk_seed=args.shuffle_chunk_seed,
                                      seed=args.shuffle_seed,
                                      **mean_args)
+        # prepare data
+        mnist = fetch_mldata('MNIST original')
+        np.random.seed(1234) # set seed for deterministic ordering
+        p = np.random.permutation(mnist.data.shape[0])
+        X = mnist.data[p].reshape(70000, 1, 28, 28)
+        #X = mnist.data[p].reshape(70000, 28, 28, 1)
+        pad = np.zeros(shape=(70000, 15, 28, 28))
+        #pad = np.zeros(shape=(70000, 28, 28, 3))
+        X = np.concatenate([X, pad], axis=1)
+        #X = np.concatenate([X, pad], axis=3)
+        Y = mnist.target[p]
+        
+        X = X.astype(np.uint8)/255
+        X_train = X[:60000]
+        X_test = X[60000:]
+        Y_train = Y[:60000]
+        Y_test = Y[60000:]
+        
+        train_iter = mx.io.NDArrayIter(X_train, Y_train, batch_size=batch_size)
+        val_iter = mx.io.NDArrayIter(X_test, Y_test, batch_size=batch_size)
 
         cqsym, qarg_params, aux_params = get_quantized_model(sym=sym, params=(arg_params, aux_params),
                                                              excluded_sym_names=excluded_sym_names,
-                                                             calib_mode=calib_mode, calib_data=data,
+                                                             #calib_mode=calib_mode, calib_data=data,
+                                                             calib_mode=calib_mode, calib_data=val_iter,
                                                              num_calib_examples=num_calib_batches * batch_size,
-                                                             calib_layer=calib_layer, ctx=mx.gpu(0), logger=logger)
+                                                             #calib_layer=calib_layer, ctx=mx.gpu(0), logger=logger)
+                                                             calib_layer=calib_layer, ctx=mx.cpu(), logger=logger)
         if calib_mode == 'entropy':
             suffix = '-quantized-%dbatches-entropy' % num_calib_batches
         elif calib_mode == 'naive':
