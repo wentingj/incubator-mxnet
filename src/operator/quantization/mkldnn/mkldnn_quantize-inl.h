@@ -124,7 +124,7 @@ void MKLQuantizeComputeZeroCenter(const nnvm::NodeAttrs& attrs,
   tensor_shape.push_back(total_len);
 
   float real_range = MaxAbs(*inputs[1].dptr<float>(), *inputs[2].dptr<float>());
-  float quantized_range = MaxAbs(MaxValue<DstType>(), MinValue<DstType>());
+  float quantized_range = MinAbs(MaxValue<DstType>(), MinValue<DstType>());
   float scale = quantized_range / real_range;
   *outputs[1].dptr<float>() = -real_range;
   *outputs[2].dptr<float>() = real_range;
