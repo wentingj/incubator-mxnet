@@ -341,11 +341,11 @@ def test_quantized_pooling_cpu():
             arg_shapes, _, _ = pooling_fp32.infer_shape(data=data_shape)
             arg_names = pooling_fp32.list_arguments()
             pooling_fp32_exe = pooling_fp32.simple_bind(ctx=mx.current_context(), grad_req='null')
-            pooling_fp32_exe.arg_dict[arg_names[0]][:] = mx.nd.random.uniform(low=-127.0, high=127.0,
+            pooling_fp32_exe.arg_dict[arg_names[0]][:] = mx.nd.random.uniform(low=0, high=127.0,
                                                                               shape=data_shape).astype('int32')
             output = pooling_fp32_exe.forward()[0]
 
-            qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='int8')
+            qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='uint8')
             min_data = mx.sym.Variable(name='min_data')
             max_data = mx.sym.Variable(name='max_data')
             quantized_pooling = mx.sym.contrib.quantized_pooling(data=qdata, min_data=min_data,
@@ -354,7 +354,7 @@ def test_quantized_pooling_cpu():
                                                                  global_pool=global_pool)
             pooling_int8_exe = quantized_pooling.simple_bind(ctx=mx.current_context(), grad_req='null')
             qarg_names = quantized_pooling.list_arguments()
-            pooling_int8_exe.arg_dict[qarg_names[0]][:] = pooling_fp32_exe.arg_dict[arg_names[0]].astype('int8')
+            pooling_int8_exe.arg_dict[qarg_names[0]][:] = pooling_fp32_exe.arg_dict[arg_names[0]].astype('uint8')
             quantized_range = 127.0
             pooling_int8_exe.arg_dict[qarg_names[1]][:] = -quantized_range
             pooling_int8_exe.arg_dict[qarg_names[2]][:] = quantized_range
@@ -434,7 +434,7 @@ def test_quantized_fc():
 
 def test_quantized_flatten():
     def check_quantized_flatten(shape):
-        qdata = mx.nd.random.uniform(low=-127, high=127, shape=shape).astype('int8')
+        qdata = mx.nd.random.uniform(low=0, high=127, shape=shape).astype('uint8')
         min_data = mx.nd.array([-1023.343], dtype='float32')
         max_data = mx.nd.array([2343.324275], dtype='float32')
         qoutput, min_output, max_output = mx.nd.contrib.quantized_flatten(qdata, min_data, max_data)
@@ -484,10 +484,10 @@ def test_quantize_sym_with_calib():
     offline_params = [name for name in sym.list_arguments()
                       if not name.startswith('data') and not name.endswith('label')]
     qsym = mx.quantization._quantize_symbol(sym, offline_params=offline_params)
-    requantize_op_names = ['requantize_conv', 'requantize_fc']
+    requantize_op_names = ['requantize_conv']#, 'requantize_fc']
     th_dict = {'conv_output': (np.random.uniform(low=100.0, high=200.0), np.random.uniform(low=100.0, high=200.0)),
                'fc_output': (np.random.uniform(low=100.0, high=200.0), np.random.uniform(low=100.0, high=200.0))}
-    op_name_to_th_name = {'requantize_conv': 'conv_output', 'requantize_fc': 'fc_output'}
+    op_name_to_th_name = {'requantize_conv': 'conv_output'}#, 'requantize_fc': 'fc_output'}
     cqsym = mx.quantization._calibrate_quantized_sym(qsym, th_dict)
     attr_dict = cqsym.attr_dict()
     for name in requantize_op_names:
