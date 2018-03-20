@@ -314,8 +314,8 @@ Graph SetCalibTableToQuantizedGraph(Graph&& g) {
         std::vector<std::string> names = list_output_names_func(quantized_op_node->attrs);
         CHECK_EQ(names.size(), 3U) << "ListOutputNames is expected to return three string for"
                                       " quantized operators";
-        //out_data_name += names[0];
-        out_data_name += "0";
+        out_data_name += names[0];
+        //out_data_name += "0";
       } else {
         out_data_name += "0";
       }

@@ -62,8 +62,8 @@ void QuantizedFlattenCompute(const nnvm::NodeAttrs& attrs,
   using namespace mxnet_op;
   Stream<xpu> *s = ctx.get_stream<xpu>();
 
-  typedef int8_t DstDType;
-  typedef int8_t  SrcDType;
+  typedef uint8_t DstDType;
+  typedef uint8_t SrcDType;
   Kernel<quantized_flatten, xpu>::Launch(s, outputs[0].Size(),
     outputs[0].dptr<DstDType>(), outputs[1].dptr<float>(), outputs[2].dptr<float>(),
     inputs[0].dptr<SrcDType>(), inputs[1].dptr<float>(), inputs[2].dptr<float>());
@@ -82,7 +82,6 @@ inline bool QuantizedFlattenShape(const nnvm::NodeAttrs& attrs,
   for (uint32_t i = 1; i < dshape.ndim(); ++i) {
     target_dim *= dshape[i];
   }
-
   SHAPE_ASSIGN_CHECK(*in_attrs, 1, TShape{1});
   SHAPE_ASSIGN_CHECK(*in_attrs, 2, TShape{1});
   SHAPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::Shape2(dshape[0], target_dim));

@@ -319,7 +319,7 @@ def _get_optimal_thresholds(nd_dict, num_bins=8001, num_quantized_bins=255, logg
         logger.info('Calculating optimal thresholds for quantization using KL divergence'
                     ' with num_bins=%d and num_quantized_bins=%d' % (num_bins, num_quantized_bins))
     th_dict = {}
-    layer_names = nd_dict.keys()
+    layer_names = list(nd_dict)
     for name in layer_names:
         assert name in nd_dict
         min_val, max_val, min_divergence, opt_th = _get_optimal_threshold(nd_dict[name], num_bins=num_bins,
