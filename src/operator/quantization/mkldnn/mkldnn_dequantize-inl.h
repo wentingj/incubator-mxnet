@@ -125,11 +125,11 @@ void MKLDequantizeComputeKer(const nnvm::NodeAttrs& attrs,
 
   float quantized_range = MinAbs(MaxValue<SrcType>(), MinValue<SrcType>());
   float real_range = MaxAbs(*inputs[1].dptr<DstType>(), *inputs[2].dptr<DstType>());
-  std::cout<<"--MKLDeuantizeComputeKerInt8: real_range="<<real_range<<std::endl;
-  std::cout<<"                       : inputs[1]="<<inputs[1].dptr<DstType>()[0]<<std::endl;
-  std::cout<<"                       : inputs[2]="<<inputs[2].dptr<DstType>()[0]<<std::endl;
-  std::cout<<"                       : quantized_range="<<quantized_range<<std::endl;
-  std::cout<<"                       : real_range="<<real_range<<std::endl;
+  //std::cout<<"--MKLDeuantizeComputeKerInt8: real_range="<<real_range<<std::endl;
+  //std::cout<<"                       : inputs[1]="<<inputs[1].dptr<DstType>()[0]<<std::endl;
+  //std::cout<<"                       : inputs[2]="<<inputs[2].dptr<DstType>()[0]<<std::endl;
+  //std::cout<<"                       : quantized_range="<<quantized_range<<std::endl;
+  //std::cout<<"                       : real_range="<<real_range<<std::endl;
 
   float scale = real_range / quantized_range;
 
