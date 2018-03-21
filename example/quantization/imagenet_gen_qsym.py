@@ -141,9 +141,10 @@ if __name__ == '__main__':
     excluded_sym_names = []
     if args.model == 'imagenet1k-resnet-152':
         rgb_mean = '0,0,0'
-        calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
-                                                                     or name.find('sc') != -1
-                                                                     or name.find('fc') != -1)
+        calib_layer = lambda name: (name.find('conv') != -1)
+        #calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
+        #                                                             or name.find('sc') != -1
+        #                                                             or name.find('fc') != -1)
         if exclude_first_conv:
             excluded_sym_names = ['conv0']
     elif args.model == 'imagenet1k-inception-bn':
