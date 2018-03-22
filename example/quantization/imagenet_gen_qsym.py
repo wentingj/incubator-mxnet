@@ -117,6 +117,9 @@ if __name__ == '__main__':
         sym = conv_net
         prefix = "conv_mnist"
         _, arg_params, aux_params = mx.model.load_checkpoint(prefix, epoch)
+    elif args.model == 'vgg16':
+        prefix, epoch = "./model/vgg16", 0
+        sym, arg_params, aux_params = mx.model.load_checkpoint("./model/vgg16", 0)
     else:
         # download model
         prefix, epoch = download_model(model_name=args.model, logger=logger)
@@ -139,9 +142,9 @@ if __name__ == '__main__':
 
     exclude_first_conv = args.exclude_first_conv
     excluded_sym_names = []
-    if args.model == 'imagenet1k-resnet-152':
+    if (args.model == 'imagenet1k-resnet-152') or (args.model == 'imagenet1k-resnet-50'):
         rgb_mean = '0,0,0'
-        calib_layer = lambda name: (name.find('conv') != -1)
+        calib_layer = lambda name: (name.find('conv') != -1) or name.find('sc') != -1
         #calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
         #                                                             or name.find('sc') != -1
         #                                                             or name.find('fc') != -1)
@@ -149,10 +152,16 @@ if __name__ == '__main__':
             excluded_sym_names = ['conv0']
     elif args.model == 'imagenet1k-inception-bn':
         rgb_mean = '123.68,116.779,103.939'
-        calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
-                                                                     or name.find('fc') != -1)
+        calib_layer = lambda name: (name.find('conv') != -1)
+        #calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
+        #                                                             or name.find('fc') != -1)
         if exclude_first_conv:
             excluded_sym_names = ['conv_1']
+    elif args.model == 'vgg16':
+        rgb_mean = '0,0,0'
+        calib_layer = lambda name: (name.find('conv') != -1)
+        if exclude_first_conv:
+            excluded_sym_names = ['conv1_1']
     elif args.model == 'conv_mnist_mkl':
         rgb_mean = '0,0,0'
         calib_layer = []
@@ -176,15 +185,14 @@ if __name__ == '__main__':
                                                             excluded_sym_names=excluded_sym_names,
                                                             calib_mode=calib_mode, logger=logger)
         sym_name = '%s-symbol.json' % (prefix + '-quantized')
-        print(qsym)
         save_symbol(sym_name, qsym, logger)
         
-        graph = mx.viz.plot_network(sym)
-        graph.format = 'png'
-        graph.render('simple')
-        graph1 = mx.viz.plot_network(qsym)
-        graph1.format = 'png'
-        graph1.render('quantized') 
+        #graph = mx.viz.plot_network(sym)
+        #graph.format = 'png'
+        #graph.render('simple')
+        #graph1 = mx.viz.plot_network(qsym)
+        #graph1.format = 'png'
+        #graph1.render('quantized') 
     else:
         logger.info('Creating ImageRecordIter for reading calibration dataset')
         data = mx.io.ImageRecordIter(path_imgrec=args.calib_dataset,
@@ -222,6 +230,7 @@ if __name__ == '__main__':
             val_iter = mx.io.NDArrayIter(X_test, Y_test, batch_size=batch_size)
             data = val_iter
 
+        print('calib_layer=', calib_layer)
         cqsym, qarg_params, aux_params = get_quantized_model(sym=sym, params=(arg_params, aux_params),
                                                              excluded_sym_names=excluded_sym_names,
                                                              calib_mode=calib_mode, calib_data=data,
