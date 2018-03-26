@@ -204,8 +204,8 @@ MXNET_OPERATOR_REGISTER_REDUCE_BACKWARD(_backward_nanprod)
 MXNET_OPERATOR_REGISTER_REDUCE(max)
 .add_alias("max_axis")
 .describe(get_reduce_axes_description("max", __LINE__))
-.set_attr<FCompute>("FCompute<cpu>", ReduceAxesCompute<cpu, mshadow::red::maximum>)
-//.set_attr<FCompute>("FCompute<cpu>", MyReduceMaxCompute)
+//.set_attr<FCompute>("FCompute<cpu>", ReduceAxesCompute<cpu, mshadow::red::maximum>)
+.set_attr<FCompute>("FCompute<cpu>", MyReduceMaxCompute)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
@@ -219,8 +219,8 @@ MXNET_OPERATOR_REGISTER_REDUCE_BACKWARD(_backward_max)
 MXNET_OPERATOR_REGISTER_REDUCE(min)
 .add_alias("min_axis")
 .describe(get_reduce_axes_description("min", __LINE__))
-.set_attr<FCompute>("FCompute<cpu>", ReduceAxesCompute<cpu, mshadow::red::minimum>)
-//.set_attr<FCompute>("FCompute<cpu>", MyReduceMinCompute)
+//.set_attr<FCompute>("FCompute<cpu>", ReduceAxesCompute<cpu, mshadow::red::minimum>)
+.set_attr<FCompute>("FCompute<cpu>", MyReduceMinCompute)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>{ResourceRequest::kTempSpace};
