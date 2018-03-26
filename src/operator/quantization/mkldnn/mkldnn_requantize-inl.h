@@ -39,7 +39,7 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
   using red::limits::MaxValue;
   using red::limits::MinValue;
   typedef int32_t SrcDType;
-  typedef int8_t  DstDType;
+  typedef uint8_t  DstDType;
 
   // check shapes
   int i_dim = inputs[0].ndim();
@@ -55,13 +55,15 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
   }
   tensor_shape.push_back(total_len);
 
-  float first_quantized_range = MinAbs(MinValue<SrcDType>(),
+  //float first_quantized_range = MinAbs(MinValue<SrcDType>(),
+  float first_quantized_range = MaxAbs(MinValue<SrcDType>(),
                                        MaxValue<SrcDType>());
   float first_real_range = MaxAbs(*inputs[1].dptr<float>(),
                                   *inputs[2].dptr<float>());
   float scale1 = first_real_range / first_quantized_range;
   float second_real_range = real_range;
-  float second_quantized_range = MinAbs(MaxValue<DstDType>(),
+  //float second_quantized_range = MinAbs(MaxValue<DstDType>(),
+  float second_quantized_range = MaxAbs(MaxValue<DstDType>(),
                                         MinValue<DstDType>());
   float scale2 = second_quantized_range / second_real_range;
   float scale = scale1*scale2;
@@ -89,8 +91,14 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
   auto r = reorder(reorder_pd, input, output);
   stream(stream::kind::lazy).submit({r}).wait();
 
-  *outputs[1].dptr<float>() = -second_real_range;
+  *outputs[1].dptr<float>() = 0;//-second_real_range;
   *outputs[2].dptr<float>() = second_real_range;
+  //std::cout<<"--MKLReQuantizeComputeKerUint8: first_real_range="<<first_real_range<<std::endl;
+  //std::cout<<"                              : second_real_range="<<second_real_range<<std::endl;
+  //std::cout<<"                              : inputs[1]="<<inputs[1].dptr<float>()[0]<<std::endl;
+  //std::cout<<"                              : inputs[2]="<<inputs[2].dptr<float>()[0]<<std::endl;
+  //std::cout<<"                              : first_quantized_range="<<first_quantized_range<<std::endl;
+  //std::cout<<"                              : second_quantized_range="<<second_quantized_range<<std::endl;
 }
 
 void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
@@ -101,7 +109,7 @@ void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mxnet_op;
   typedef int32_t SrcDType;
-  typedef int8_t  DstDType;
+  typedef uint8_t  DstDType;
   Stream<cpu> *s = ctx.get_stream<cpu>();
   const RequantizeParam& param = nnvm::get<RequantizeParam>(attrs.parsed);
   float real_range;
