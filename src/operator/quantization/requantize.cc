@@ -46,11 +46,11 @@ inference accuracy.
 .set_num_outputs(3)
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizeShape)
 .set_attr<nnvm::FInferType>("FInferType", RequantizeType)
-#if MXNET_USE_MKLDNN == 1
-.set_attr<FCompute>("FCompute<cpu>", MKLDNNRequantizeForward)
-#else
+//#if MXNET_USE_MKLDNN == 1
+//.set_attr<FCompute>("FCompute<cpu>", MKLDNNRequantizeForward)
+//#else
 .set_attr<FCompute>("FCompute<cpu>", RequantizeForward<cpu>)
-#endif
+//#endif
 .set_attr<FResourceRequest>("FResourceRequest", [](const NodeAttrs& attrs) {
     const RequantizeParam& param =
       nnvm::get<RequantizeParam>(attrs.parsed);

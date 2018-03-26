@@ -62,7 +62,8 @@ inline bool RequantizeType(const nnvm::NodeAttrs& attrs,
   TYPE_ASSIGN_CHECK(*in_attrs, 0, mshadow::kInt32);
   TYPE_ASSIGN_CHECK(*in_attrs, 1, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*in_attrs, 2, mshadow::kFloat32);
-  TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kInt8);
+  //TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kInt8);
+  TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kUint8);
   TYPE_ASSIGN_CHECK(*out_attrs, 1, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*out_attrs, 2, mshadow::kFloat32);
   return (*in_attrs)[0] != -1;
@@ -111,7 +112,8 @@ void RequantizeForward(const nnvm::NodeAttrs& attrs,
   using namespace mshadow;
   using namespace mxnet_op;
   typedef int32_t SrcDType;
-  typedef int8_t  DstDType;
+  //typedef int8_t  DstDType;
+  typedef uint8_t  DstDType;
   Stream<xpu> *s = ctx.get_stream<xpu>();
   const RequantizeParam& param =
     nnvm::get<RequantizeParam>(attrs.parsed);

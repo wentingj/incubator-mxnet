@@ -21,7 +21,7 @@ import time
 import os
 import logging
 from mxnet.quantization import *
-from sklearn.datasets import fetch_mldata
+#from sklearn.datasets import fetch_mldata
 
 
 def download_dataset(dataset_url, dataset_dir, logger=None):
@@ -232,8 +232,13 @@ if __name__ == '__main__':
 
         num_inference_images = args.num_inference_batches * batch_size
         logger.info('Running model %s for inference' % symbol_file)
+        
+        start = time.time()
         score(sym, arg_params, aux_params, data, [mx.cpu()], label_name,
               max_num_examples=num_inference_images, logger=logger)
+        end = time.time()
+        print ("Inference:")
+        print ("--- %i samples in %s seconds (%f samples/s, %.7f s/sample) ---" % (num_inference_images, end - start, num_inference_images / (end - start), (end - start) / num_inference_images))
     else:
        # loading model
        sym, arg_params, aux_params = load_model(symbol_file, param_file, logger)
