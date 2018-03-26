@@ -184,8 +184,8 @@ if __name__ == '__main__':
         rgb_mean = '0,0,0'
         #calib_layer = lambda name: name.endswith('_output') and (name.find('conv') != -1
         #                                                             or name.find('fc') != -1)
-        #calib_layer = lambda name: (name.find('convRelu') != -1)
-        calib_layer = [] 
+        calib_layer = lambda name: (name.find('convRelu') != -1)
+        #calib_layer = [] 
         if exclude_first_conv:
             #excluded_sym_names = []
             excluded_sym_names = ['conv1_1', 'relu1_1']
@@ -243,7 +243,8 @@ if __name__ == '__main__':
                                                              excluded_sym_names=excluded_sym_names,
                                                              calib_mode=calib_mode, calib_data=data,
                                                              num_calib_examples=num_calib_batches * batch_size,
-                                                             calib_layer=calib_layer, ctx=mx.cpu(0), logger=logger)
+                                                             calib_layer=calib_layer, ctx=mx.cpu(0), 
+                                                             label_name=label_name, logger=logger)
         if calib_mode == 'entropy':
             suffix = '-quantized-%dbatches-entropy' % num_calib_batches
         elif calib_mode == 'naive':
