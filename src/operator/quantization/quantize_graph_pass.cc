@@ -129,7 +129,11 @@ Graph QuantizeGraph(Graph &&src) {
              mirror_node->op()->name != "_contrib_quantize")) {
           NodePtr quantize_node = InsertNode("_contrib_quantize",
             e.node->attrs.name + "_quantize", new_node, mirror_entry);
-          quantize_node->attrs.dict["out_type"] = "int8";
+          #if MXNET_USE_MKLDNN == 1
+            quantize_node->attrs.dict["out_type"] = "uint8";
+          #else
+            quantize_node->attrs.dict["out_type"] = "int8";
+          #endif
           quantize_node->op()->attr_parser(&(quantize_node->attrs));
 
           NodePtr min_node = InsertNode("min",
