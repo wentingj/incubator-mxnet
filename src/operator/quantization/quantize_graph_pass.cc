@@ -163,7 +163,7 @@ Graph QuantizeGraph(Graph &&src) {
         uint32_t min_index = 1;
         uint32_t max_index = 2;
         if (quantized_op_map.count(e.node->op())) {
-          size_t  num_outputs = e.node->num_outputs();
+          size_t  num_outputs = new_node->num_outputs() - 2;
           min_index = num_outputs + 2 * e.index;
           max_index = num_outputs + 2 * e.index + 1;
         } else {
