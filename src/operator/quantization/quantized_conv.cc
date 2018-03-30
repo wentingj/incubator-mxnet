@@ -111,6 +111,25 @@ bool QuantizedConvType(const nnvm::NodeAttrs& attrs,
   return true;
 }
 
+bool QuantizedConvStorageType(const nnvm::NodeAttrs& attrs,
+                              const int dev_mask,
+                              DispatchMode* dispatch_mode,
+                              std::vector<int> *in_attrs,
+                              std::vector<int> *out_attrs) {
+#if MXNET_USE_MKLDNN == 1
+  *dispatch_mode = DispatchMode::kFComputeEx;
+  if (dev_mask == mshadow::cpu::kDevMask)
+    *dispatch_mode = DispatchMode::kFComputeEx;
+  else
+#endif
+    *dispatch_mode = DispatchMode::kFCompute;
+
+  (*out_attrs)[0] = kDefaultStorage;
+  (*out_attrs)[1] = kDefaultStorage;
+  (*out_attrs)[2] = kDefaultStorage;
+  return true;
+}
+
 NNVM_REGISTER_OP(_contrib_quantized_conv)
 .describe(R"code(Convolution operator for input, weight and bias data type of int8,
 and accumulates in type int32 for the output. For each argument, two more arguments of type
@@ -144,6 +163,7 @@ and max thresholds representing the threholds for quantizing the float32 output 
   })
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizedConvShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizedConvType)
+.set_attr<FInferStorageType>("FInferStorageType", QuantizedConvStorageType)
 .set_attr<FResourceRequest>("FResourceRequest",
   [](const NodeAttrs& attrs) {
     return std::vector<ResourceRequest>(1, ResourceRequest::kTempSpace);

@@ -77,36 +77,38 @@ class MKLDNNQuantizedPoolingFwd {
             const int padding_l, const int padding_r);
 };
 
-//inline bool SupportMKLDNNPooling(const PoolingParam &param) {
-//  return param.kernel.ndim() == 2 &&
-//         (param.pool_type == pool_enum::kMaxPooling ||
-//          param.pool_type == pool_enum::kAvgPooling);
-//}
-//
-//inline bool SupportMKLDNNPooling(const PoolingParam &param,
-//                                 const TShape &dshape) {
-//  bool ret = SupportMKLDNNPooling(param);
-//  if (!ret)
-//    return false;
-//
-//  if (param.pooling_convention == pool_enum::kValid)
-//    return true;
-//
-//  if (((dshape[2] + 2 * param.pad[0] - param.kernel[0]) % param.stride[0] == 0) &&
-//      ((dshape[3] + 2 * param.pad[1] - param.kernel[1]) % param.stride[1] == 0))
-//    return true;
-//  else
-//    return false;
-//}
+inline bool SupportMKLDNNQuantizedPooling(const PoolingParam &param) {
+  return param.kernel.ndim() == 2 &&
+         (param.pool_type == pool_enum::kMaxPooling ||
+          param.pool_type == pool_enum::kAvgPooling);
+}
+
+inline bool SupportMKLDNNQuantizedPooling(const PoolingParam &param,
+                                 const TShape &dshape) {
+  bool ret = SupportMKLDNNQuantizedPooling(param);
+  if (!ret)
+    return false;
+
+  if (param.pooling_convention == pool_enum::kValid)
+    return true;
+
+  if (((dshape[2] + 2 * param.pad[0] - param.kernel[0]) % param.stride[0] == 0) &&
+      ((dshape[3] + 2 * param.pad[1] - param.kernel[1]) % param.stride[1] == 0))
+    return true;
+  else
+    return false;
+}
 
 inline bool MKLDNNRequireWorkspace(const PoolingParam &param) {
   return param.pool_type != pool_enum::kAvgPooling;
 }
 
 typedef ParamOpSign<PoolingParam> MKLDNNPoolingSignature;
-void MKLDNNQuantizedPoolingCompute(const OpContext &ctx, const PoolingParam &param,
-                          const NDArray &in_data, const OpReqType req,
-                          const NDArray &out_data);
+void MKLDNNQuantizedPoolingForward(const nnvm::NodeAttrs& attrs,
+                                   const OpContext &ctx,
+                                   const std::vector<NDArray> &in_data,
+                                   const std::vector<OpReqType> &req,
+                                   const std::vector<NDArray> &out_data);
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_USE_MKLDNN == 1
