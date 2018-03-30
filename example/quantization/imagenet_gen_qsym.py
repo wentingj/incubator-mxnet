@@ -94,9 +94,9 @@ if __name__ == '__main__':
                              ' inference dataset.')
     args = parser.parse_args()
 
-    if args.ctx == 'cpu':
+    if args.ctx == 'gpu':
         ctx = mx.gpu(0)
-    elif args.ctx == 'gpu':
+    elif args.ctx == 'cpu':
         ctx = mx.cpu(0)
     else:
         raise ValueError('ctx %s is not supported in this script' % args.ctx)
