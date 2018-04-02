@@ -60,7 +60,6 @@ void MKLDNNQuantizeComputeKer(const std::vector<TBlob>& inputs,
     *outputs[2].dptr<float>() = real_range;
   }
   float scale = quantized_range / real_range;
-  
   primitive_attr attr;
   int mask = 0;
   std::vector<float> scales = {scale};
@@ -99,5 +98,4 @@ void MKLDNNQuantizeCompute(const nnvm::NodeAttrs& attrs,
 
 }  // namespace op
 }  // namespace mxnet
-#endif  // MXNET_OPERATOR_MKL_DNN_MKLDNN_QUANTIZE_INL_H_
-
+#endif  // MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_QUANTIZE_INL_H_

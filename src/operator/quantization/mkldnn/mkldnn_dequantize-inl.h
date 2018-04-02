@@ -70,11 +70,11 @@ void MKLDNNDequantizeComputeKer(const std::vector<TBlob>& inputs,
                                        (mkldnn::memory::data_type)data_type_enum<DstType>::type,
                                        memory::format::x},
                                        cpu_engine);
-   auto reorder_pd  = reorder::primitive_desc(i_mpd, o_mpd, attr);
-   auto input = memory(i_mpd, inputs[0].dptr<SrcType>());
-   auto output = memory(o_mpd, outputs[0].dptr<DstType>());
-   auto r = reorder(reorder_pd, input, output);
-   stream(stream::kind::lazy).submit({r}).wait();
+  auto reorder_pd = reorder::primitive_desc(i_mpd, o_mpd, attr);
+  auto input = memory(i_mpd, inputs[0].dptr<SrcType>());
+  auto output = memory(o_mpd, outputs[0].dptr<DstType>());
+  auto r = reorder(reorder_pd, input, output);
+  stream(stream::kind::lazy).submit({r}).wait();
 }
 
 void MKLDNNDequantizeCompute(const nnvm::NodeAttrs& attrs,

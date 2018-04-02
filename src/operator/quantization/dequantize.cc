@@ -54,7 +54,7 @@ by keep zero centered for the quantized value:
 .set_attr<nnvm::FInferShape>("FInferShape", DequantizeShape)
 .set_attr<nnvm::FInferType>("FInferType", DequantizeType)
 #if MXNET_USE_MKLDNN == 1
-.set_attr<FCompute>("FCompute<cpu>", MKLDequantizeCompute)
+.set_attr<FCompute>("FCompute<cpu>", MKLDNNDequantizeCompute)
 #else
 .set_attr<FCompute>("FCompute<cpu>", DequantizeCompute<cpu>)
 #endif

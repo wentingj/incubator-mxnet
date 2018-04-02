@@ -27,6 +27,7 @@
 #if MXNET_USE_MKLDNN == 1
 
 #include <utility>
+#include <vector>
 #include <mkldnn.hpp>
 #include "../pooling-inl.h"
 #include "./mkldnn_base-inl.h"
@@ -86,4 +87,4 @@ void MKLDNNQuantizedPoolingForward(const nnvm::NodeAttrs& attrs,
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_USE_MKLDNN == 1
-#endif  // MXNET_OPERATOR_NN_MKLDNN_MKLDNN_POOLING_INL_H_
+#endif  // MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_QUANTIZED_POOLING_INL_H_

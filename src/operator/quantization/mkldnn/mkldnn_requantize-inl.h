@@ -80,14 +80,11 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
                                       (mkldnn::memory::data_type)data_type_enum<DstDType>::type,
                                        memory::format::x},
                                        cpu_engine);
-  
   auto reorder_pd  = reorder::primitive_desc(i_mpd, o_mpd, attr);
   auto input = memory(i_mpd, inputs[0].dptr<SrcDType>());
   auto output = memory(o_mpd, outputs[0].dptr<DstDType>());
-  
   auto r = reorder(reorder_pd, input, output);
   stream(stream::kind::lazy).submit({r}).wait();
-
   *outputs[1].dptr<float>() = -second_real_range;
   *outputs[2].dptr<float>() = second_real_range;
 }
@@ -116,16 +113,15 @@ void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
     TShape src_shape, dst_shape;
     const size_t actual_float_size = sizeof(float);
     const size_t actual_quantized_size = sizeof(SrcDType);
-    const size_t temp_reduce_size = ConfigReduce<cpu, SrcDType>(s, 
+    const size_t temp_reduce_size = ConfigReduce<cpu, SrcDType>(s,
                          inputs[0].shape_, TShape({1}), &src_shape, &dst_shape);
     Tensor<cpu, 1, char> temp_space =
       ctx.requested[0].get_space_typed<cpu, 1, char>(
-       Shape1(2*actual_float_size+2*actual_quantized_size+temp_reduce_size), s);
+      Shape1(2*actual_float_size+2*actual_quantized_size+temp_reduce_size), s);
     Tensor<cpu, 1, float> actual_min_float(
-                     reinterpret_cast<float*>(temp_space.dptr_), Shape1(1), s);
+                 reinterpret_cast<float*>(temp_space.dptr_), Shape1(1), s);
     Tensor<cpu, 1, float> actual_max_float(
                  reinterpret_cast<float*>(temp_space.dptr_) + 1, Shape1(1), s);
-
     const int dev_id = ctx.run_ctx.ctx.dev_id;
     TBlob actual_min_quantized(reinterpret_cast<SrcDType*>(
                        temp_space.dptr_ + 8), Shape1(1), cpu::kDevMask, dev_id);
@@ -135,15 +131,14 @@ void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
             temp_space.dptr_+2*actual_float_size+2*actual_quantized_size,
             Shape1(temp_reduce_size), s);
     broadcast::Reduce<red::minimum, 2, SrcDType, mshadow::op::identity>(
-      s, actual_min_quantized.reshape(dst_shape), kWriteTo, 
-      workspace, inputs[0].reshape(src_shape));
+        s, actual_min_quantized.reshape(dst_shape), kWriteTo,
+        workspace, inputs[0].reshape(src_shape));
     Kernel<QuantizedToFloatStruct, cpu>::Launch(s, 1,
         actual_min_float.dptr_, actual_min_quantized.dptr<SrcDType>(),
         inputs[1].dptr<float>(), inputs[2].dptr<float>());
-
     broadcast::Reduce<red::maximum, 2, SrcDType, mshadow::op::identity>(
-      s, actual_max_quantized.reshape(dst_shape), kWriteTo,
-      workspace, inputs[0].reshape(src_shape));
+        s, actual_max_quantized.reshape(dst_shape), kWriteTo,
+        workspace, inputs[0].reshape(src_shape));
     Kernel<QuantizedToFloatStruct, cpu>::Launch(s, 1,
         actual_max_float.dptr_, actual_max_quantized.dptr<SrcDType>(),
         inputs[1].dptr<float>(), inputs[2].dptr<float>());
@@ -155,5 +150,4 @@ void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
 
 }  // namespace op
 }  // namespace mxnet
-#endif  // MXNET_OPERATOR_MKL_DNN_MKLDNN_REQUANTIZE_INL_H_
-
+#endif  // MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_REQUANTIZE_INL_H_
