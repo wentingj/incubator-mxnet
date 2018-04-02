@@ -18,7 +18,7 @@
  */
 
 /*!
- * \file mkldnn_pooling.cc
+ * \file mkldnn_quantized_pooling.cc
  * \brief
  * \author Tao Lv
 */

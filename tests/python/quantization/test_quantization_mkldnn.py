@@ -177,42 +177,6 @@ def test_quantized_conv():
     check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), True)
     check_quantized_conv((3, 4, 28, 28), (3, 3), 128, (1, 1), (1, 1), False)
 
-
-#def test_quantized_relu():
-#    if mx.current_context().device_type != 'cpu':
-#        return
-#
-#    def check_quantized_relu(data_shape):
-#        with mx.Context('cpu', 0):
-#            data = mx.sym.Variable(name='data', shape=data_shape, dtype='float32')
-#            relu_fp32 = mx.sym.Activation(data=data, act_type='relu')
-#            arg_shapes, _, _ = relu_fp32.infer_shape(data=data_shape)
-#            arg_names = relu_fp32.list_arguments()
-#            relu_fp32_exe = relu_fp32.simple_bind(ctx=mx.current_context(), grad_req='null')
-#            relu_fp32_exe.arg_dict[arg_names[0]][:] = mx.nd.random.uniform(low=-127.0, high=127.0,
-#                                                                              shape=data_shape).astype('int32')
-#            output = relu_fp32_exe.forward()[0]
-#
-#            qdata = mx.sym.Variable(name='qdata', shape=data_shape, dtype='int8')
-#            min_data = mx.sym.Variable(name='min_data')
-#            max_data = mx.sym.Variable(name='max_data')
-#            quantized_relu = mx.sym.contrib.quantized_activation(data=qdata,
-#                                                             min_data=min_data,
-#                                                             max_data=max_data,
-#                                                             act_type='relu')
-#            relu_int8_exe = quantized_relu.simple_bind(ctx=mx.current_context(), grad_req='null')
-#            qarg_names = quantized_relu.list_arguments()
-#            relu_int8_exe.arg_dict[qarg_names[0]][:] = relu_fp32_exe.arg_dict[arg_names[0]].astype('int8')
-#            quantized_range = 127.0
-#            relu_int8_exe.arg_dict[qarg_names[1]][:] = -quantized_range
-#            relu_int8_exe.arg_dict[qarg_names[2]][:] = quantized_range
-#            qoutput, min_range, max_range = relu_int8_exe.forward()
-#
-#            assert_almost_equal(output.asnumpy(), qoutput.asnumpy())
-#
-#    check_quantized_relu((2, 13, 13))
-
-
 def test_quantized_pooling():
     if mx.current_context().device_type != 'cpu':
         return
@@ -309,7 +273,7 @@ def test_quantize_sym_with_calib():
     offline_params = [name for name in sym.list_arguments()
                       if not name.startswith('data') and not name.endswith('label')]
     qsym = mx.contrib.quantization._quantize_symbol(sym, offline_params=offline_params)
-    requantize_op_names = ['requantize_conv']#, 'requantize_fc']
+    requantize_op_names = ['requantize_conv']
     th_dict = {'conv_output': (np.random.uniform(low=100.0, high=200.0), np.random.uniform(low=100.0, high=200.0))}
     op_name_to_th_name = {'requantize_conv': 'conv_output'}
     cqsym = mx.contrib.quantization._calibrate_quantized_sym(qsym, th_dict)

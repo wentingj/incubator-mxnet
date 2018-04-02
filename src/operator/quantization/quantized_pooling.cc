@@ -24,7 +24,6 @@
 #include <mxnet/op_attr_types.h>
 #include "../nn/pooling-inl.h"
 #if MXNET_USE_MKLDNN == 1
-#include "../nn/mkldnn/mkldnn_ops-inl.h"
 #include "./mkldnn/mkldnn_quantized_pooling-inl.h"
 #endif
 

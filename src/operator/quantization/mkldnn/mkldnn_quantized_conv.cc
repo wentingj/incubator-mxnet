@@ -20,12 +20,12 @@
 /*!
  * \file mkldnn_quantized_onvolution.cc
  * \brief
- * \author Da Zheng
+ * \author Wenting Jiang
 */
 
 #if MXNET_USE_MKLDNN == 1
-#include "../../nn/convolution-inl.h"
 #include "../../nn/mkldnn/mkldnn_base-inl.h"
+#include "../../nn/convolution-inl.h"
 #include "../quantization_utils.h"
 #include "../../tensor/matrix_op-inl.h"
 #include "../../elemwise_op_common.h"
