@@ -81,17 +81,9 @@ void MKLDNNQuantizedPoolingFwd::Init(const mxnet::NDArray &input, const mxnet::N
   this->fwd_pd_.reset(new mkldnn::pooling_forward::primitive_desc(fwd_desc, engine));
   this->data_.reset(new mkldnn::memory(input.GetMKLDNNData()->get_primitive_desc()));
   this->out_.reset(new mkldnn::memory(this->fwd_pd_->dst_primitive_desc()));
-  if (this->with_workspace_) {
-    this->workspace_.reset(new mkldnn::memory(this->fwd_pd_->workspace_primitive_desc()));
-    this->fwd_.reset(new mkldnn::pooling_forward(*(this->fwd_pd_),
-                                                 mkldnn::primitive::at(*(this->data_)),
-                                                 *(this->out_),
-                                                 *(this->workspace_)));
-  } else {
-    this->fwd_.reset(new mkldnn::pooling_forward(*(this->fwd_pd_),
+  this->fwd_.reset(new mkldnn::pooling_forward(*(this->fwd_pd_),
                                                  mkldnn::primitive::at(*(this->data_)),
                                                  *(this->out_)));
-  }
   return;
 }
 
@@ -189,10 +181,8 @@ MKLDNNQuantizedPoolingFwd &GetQuantizedPoolingFwd(const PoolingParam &param,
                                          MKLDNNQuantizedPoolingFwd,
                                          OpHash> pooling_fwds;
 
-  bool with_workspace = is_train && MKLDNNRequireWorkspace(param);
   MKLDNNPoolingSignature key(param);
   key.AddSign(is_train);
-  key.AddSign(with_workspace);
   key.AddSign(data);
   key.AddSign(output);
 
@@ -231,7 +221,7 @@ MKLDNNQuantizedPoolingFwd &GetQuantizedPoolingFwd(const PoolingParam &param,
 
     const mkldnn::algorithm alg = GetMKLDNNQuantizedPoolAlgo(param);
     MKLDNNQuantizedPoolingFwd fwd(data, output, kernel_h_, kernel_w_, stride_h_, stride_w_,
-                         pad_t_, pad_b_, pad_l_, pad_r_, alg, with_workspace, is_train);
+                         pad_t_, pad_b_, pad_l_, pad_r_, alg, is_train);
     auto ins_ret = pooling_fwds.insert(
         std::pair<MKLDNNPoolingSignature, MKLDNNQuantizedPoolingFwd>(key, fwd));
     CHECK(ins_ret.second);
@@ -248,11 +238,8 @@ void MKLDNNQuantizedPoolingForward(const nnvm::NodeAttrs& attrs, const OpContext
   auto fwd = GetQuantizedPoolingFwd(param, ctx.is_train, in_data[0], out_data[0]);
   fwd.SetDataHandle(in_data[0], out_data[0]);
   fwd.Execute();
-  using namespace mxnet_op;
-  Stream<cpu> *s = ctx.get_stream<cpu>();
-  Kernel<quantized_pooling, cpu>::Launch(s, 1, 
-         out_data[1].data().dptr<float>(), out_data[2].data().dptr<float>(),
-         in_data[1].data().dptr<float>(), in_data[2].data().dptr<float>());
+  out_data[1].data().dptr<float>()[0] = in_data[1].data().dptr<float>()[0];
+  out_data[2].data().dptr<float>()[0] = in_data[2].data().dptr<float>()[0];
 }
 
 NNVM_REGISTER_OP(_contrib_quantized_pooling)
