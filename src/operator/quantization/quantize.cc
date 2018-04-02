@@ -65,7 +65,7 @@ where
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizeShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizeType)
 #if MXNET_USE_MKLDNN == 1
-.set_attr<FCompute>("FCompute<cpu>", MKLQuantizeCompute)
+.set_attr<FCompute>("FCompute<cpu>", MKLDNNQuantizeCompute)
 #else
 .set_attr<FCompute>("FCompute<cpu>", QuantizeCompute<cpu>)
 #endif
