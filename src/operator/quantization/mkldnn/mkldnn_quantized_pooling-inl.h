@@ -42,12 +42,9 @@ class MKLDNNQuantizedPoolingFwd {
                    const int stride_h, const int stride_w,
                    const int padding_t, const int padding_b,
                    const int padding_l, const int padding_r,
-                   const mkldnn::algorithm alg_kind,
-                   const bool with_workspace, const bool is_train) :
-                   is_train_(is_train),
-                   with_workspace_(with_workspace),
+                   const mkldnn::algorithm alg_kind) :
                    alg_kind_(alg_kind),
-                   fwd_(nullptr), data_(nullptr), out_(nullptr), workspace_(nullptr) {
+                   fwd_(nullptr), data_(nullptr), out_(nullptr) {
     Init(input, output,
          kernel_h, kernel_w, stride_h, stride_w,
          padding_t, padding_b, padding_l, padding_r);
@@ -59,14 +56,11 @@ class MKLDNNQuantizedPoolingFwd {
   void Execute();
 
  private:
-  bool is_train_;
-  bool with_workspace_;
   mkldnn::algorithm alg_kind_;
   std::shared_ptr<mkldnn::pooling_forward::primitive_desc> fwd_pd_;
   std::shared_ptr<mkldnn::pooling_forward> fwd_;
   std::shared_ptr<mkldnn::memory> data_;
   std::shared_ptr<mkldnn::memory> out_;
-  std::shared_ptr<mkldnn::memory> workspace_;
 
  private:
   void Init(const mxnet::NDArray &input,
@@ -81,26 +75,6 @@ inline bool SupportMKLDNNQuantizedPooling(const PoolingParam &param) {
   return param.kernel.ndim() == 2 &&
          (param.pool_type == pool_enum::kMaxPooling ||
           param.pool_type == pool_enum::kAvgPooling);
-}
-
-inline bool SupportMKLDNNQuantizedPooling(const PoolingParam &param,
-                                 const TShape &dshape) {
-  bool ret = SupportMKLDNNQuantizedPooling(param);
-  if (!ret)
-    return false;
-
-  if (param.pooling_convention == pool_enum::kValid)
-    return true;
-
-  if (((dshape[2] + 2 * param.pad[0] - param.kernel[0]) % param.stride[0] == 0) &&
-      ((dshape[3] + 2 * param.pad[1] - param.kernel[1]) % param.stride[1] == 0))
-    return true;
-  else
-    return false;
-}
-
-inline bool MKLDNNRequireWorkspace(const PoolingParam &param) {
-  return param.pool_type != pool_enum::kAvgPooling;
 }
 
 typedef ParamOpSign<PoolingParam> MKLDNNPoolingSignature;

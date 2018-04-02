@@ -30,15 +30,6 @@
 namespace mxnet {
 namespace op {
 
-struct quantized_pooling {
-  MSHADOW_XINLINE static void Map(int i, float *omin_range, float *omax_range,
-                                  const float *imin_range, 
-                                  const float *imax_range) {
-    omin_range[0] = imin_range[0];
-    omax_range[0] = imax_range[0];
-  }
-};
-
 void MKLDNNQuantizedPoolingFwd::Init(const mxnet::NDArray &input, const mxnet::NDArray &output,
                             const int kernel_h,  const int kernel_w,
                             const int stride_h,  const int stride_w,
@@ -63,12 +54,6 @@ void MKLDNNQuantizedPoolingFwd::Init(const mxnet::NDArray &input, const mxnet::N
   }
 
   mkldnn::prop_kind prop = mkldnn::prop_kind::forward_scoring;
-  if (this->is_train_ && alg_kind != mkldnn::algorithm::pooling_avg) {
-    prop = mkldnn::prop_kind::forward_training;
-  }
-  if (this->is_train_ && prop == mkldnn::prop_kind::forward_scoring) {
-    LOG(INFO) << "MKLDNN Pooling: training with prop_kind is forward_scoring";
-  }
 
   const mkldnn::memory::dims strides = {stride_h,  stride_w  };
   const mkldnn::memory::dims pad_l   = {padding_t, padding_l };
@@ -121,9 +106,8 @@ mkldnn::algorithm GetMKLDNNQuantizedPoolAlgo(const PoolingParam &param) {
 }
 
 mkldnn::pooling_forward::primitive_desc GetQuantizedPoolingFwd(const PoolingParam &param,
-                                                      const bool is_train,
-                                                      const memory::desc &data_md,
-                                                      const memory::desc &out_md) {
+                                                               const memory::desc &data_md,
+                                                               const memory::desc &out_md) {
   CHECK_EQ(param.kernel.ndim(), 2) << "Not Implemented";
   int kernel_h_, kernel_w_;
   if (param.global_pool) {
@@ -157,9 +141,6 @@ mkldnn::pooling_forward::primitive_desc GetQuantizedPoolingFwd(const PoolingPara
 
   const mkldnn::algorithm alg = GetMKLDNNQuantizedPoolAlgo(param);
   mkldnn::prop_kind kind = mkldnn::prop_kind::forward_scoring;
-  if (is_train && alg != algorithm::pooling_avg) {
-    kind = mkldnn::prop_kind::forward_training;
-  }
 
   const pooling_forward::desc poolingFwd_desc(kind, alg, data_md, out_md,
                                               {static_cast<int>(stride_h_),
@@ -174,15 +155,13 @@ mkldnn::pooling_forward::primitive_desc GetQuantizedPoolingFwd(const PoolingPara
 }
 
 MKLDNNQuantizedPoolingFwd &GetQuantizedPoolingFwd(const PoolingParam &param,
-                                const bool is_train,
-                                const NDArray &data,
-                                const NDArray &output) {
+                                                  const NDArray &data,
+                                                  const NDArray &output) {
   static thread_local std::unordered_map<MKLDNNPoolingSignature,
                                          MKLDNNQuantizedPoolingFwd,
                                          OpHash> pooling_fwds;
 
   MKLDNNPoolingSignature key(param);
-  key.AddSign(is_train);
   key.AddSign(data);
   key.AddSign(output);
 
@@ -221,7 +200,7 @@ MKLDNNQuantizedPoolingFwd &GetQuantizedPoolingFwd(const PoolingParam &param,
 
     const mkldnn::algorithm alg = GetMKLDNNQuantizedPoolAlgo(param);
     MKLDNNQuantizedPoolingFwd fwd(data, output, kernel_h_, kernel_w_, stride_h_, stride_w_,
-                         pad_t_, pad_b_, pad_l_, pad_r_, alg, is_train);
+                         pad_t_, pad_b_, pad_l_, pad_r_, alg);
     auto ins_ret = pooling_fwds.insert(
         std::pair<MKLDNNPoolingSignature, MKLDNNQuantizedPoolingFwd>(key, fwd));
     CHECK(ins_ret.second);
@@ -235,7 +214,7 @@ void MKLDNNQuantizedPoolingForward(const nnvm::NodeAttrs& attrs, const OpContext
                                    const std::vector<OpReqType> &req,
                                    const std::vector<NDArray> &out_data) {
   const PoolingParam& param = nnvm::get<PoolingParam>(attrs.parsed);
-  auto fwd = GetQuantizedPoolingFwd(param, ctx.is_train, in_data[0], out_data[0]);
+  auto fwd = GetQuantizedPoolingFwd(param, in_data[0], out_data[0]);
   fwd.SetDataHandle(in_data[0], out_data[0]);
   fwd.Execute();
   out_data[1].data().dptr<float>()[0] = in_data[1].data().dptr<float>()[0];
