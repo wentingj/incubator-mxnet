@@ -23,6 +23,9 @@
  * \brief
  */
 #include "./dequantize-inl.h"
+#if MXNET_USE_MKLDNN == 1
+#include "./mkldnn/mkldnn_dequantize-inl.h"
+#endif
 
 namespace mxnet {
 namespace op {
@@ -50,7 +53,11 @@ by keep zero centered for the quantized value:
 .set_num_outputs(1)
 .set_attr<nnvm::FInferShape>("FInferShape", DequantizeShape)
 .set_attr<nnvm::FInferType>("FInferType", DequantizeType)
+#if MXNET_USE_MKLDNN == 1
+.set_attr<FCompute>("FCompute<cpu>", MKLDNNDequantizeCompute)
+#else
 .set_attr<FCompute>("FCompute<cpu>", DequantizeCompute<cpu>)
+#endif
 .add_argument("data", "NDArray-or-Symbol", "A ndarray/symbol of type `uint8`")
 .add_argument("min_range", "NDArray-or-Symbol", "The minimum scalar value "
   "possibly produced for the input in float32")

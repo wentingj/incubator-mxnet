@@ -62,8 +62,13 @@ void QuantizedFlattenCompute(const nnvm::NodeAttrs& attrs,
   using namespace mxnet_op;
   Stream<xpu> *s = ctx.get_stream<xpu>();
 
+#if MXNET_USE_MKLDNN == 1
+  typedef uint8_t SrcDType;
+  typedef uint8_t DstDType;
+#else
+  typedef int8_t SrcDType;
   typedef int8_t DstDType;
-  typedef int8_t  SrcDType;
+#endif
   Kernel<quantized_flatten, xpu>::Launch(s, outputs[0].Size(),
     outputs[0].dptr<DstDType>(), outputs[1].dptr<float>(), outputs[2].dptr<float>(),
     inputs[0].dptr<SrcDType>(), inputs[1].dptr<float>(), inputs[2].dptr<float>());
@@ -96,10 +101,18 @@ inline bool QuantizedFlattenType(const nnvm::NodeAttrs& attrs,
                                  std::vector<int> *out_attrs) {
   CHECK_EQ(in_attrs->size(), 3U);
   CHECK_EQ(out_attrs->size(), 3U);
+#if MXNET_USE_MKLDNN == 1
+  TYPE_ASSIGN_CHECK(*in_attrs, 0, mshadow::kUint8);
+#else
   TYPE_ASSIGN_CHECK(*in_attrs, 0, mshadow::kInt8);
+#endif
   TYPE_ASSIGN_CHECK(*in_attrs, 1, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*in_attrs, 2, mshadow::kFloat32);
+#if MXNET_USE_MKLDNN == 1
+  TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kUint8);
+#else
   TYPE_ASSIGN_CHECK(*out_attrs, 0, mshadow::kInt8);
+#endif
   TYPE_ASSIGN_CHECK(*out_attrs, 1, mshadow::kFloat32);
   TYPE_ASSIGN_CHECK(*out_attrs, 2, mshadow::kFloat32);
   return (*in_attrs)[0] != -1;
