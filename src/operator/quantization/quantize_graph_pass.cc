@@ -93,17 +93,19 @@ inline bool NeedQuantize(NodePtr node, const std::unordered_set<NodePtr> exclude
   static auto& quantized_op_map = Op::GetAttr<mxnet::FQuantizedOp>("FQuantizedOp");
   return quantized_op_map.count(node->op()) && !excluded_nodes.count(node);
 }
-
+#if 0
+// conv->bn->relu   conv->relu
 Graph FusionGraphImpl(Graph &src) {
   DFSVisit(src.outputs, [&](const NodePtr& node) {
     //change conv->relu->node to convRelu->node 
-    for (const auto& e : node->inputs) {
+    for (auto& e : node->inputs) {
       //find relu->node
       if (e.node->op() != nullptr && e.node->op()->name == "Activation") {
-        for (const auto& e_second_layer : e.node->inputs) {
+        for (auto& e_second_layer : e.node->inputs) {
           //find conv->relu->node
           if (e_second_layer.node->op() != nullptr
             && e_second_layer.node->op()->name == "Convolution") {
+            
             std::string conv_node_name = e_second_layer.node->attrs.name;
             std::string conv_relu_node_name = conv_node_name.replace(\
               conv_node_name.find("convolution"), strlen("convolution"), "convolutionRelu");
@@ -135,23 +137,216 @@ Graph FusionGraphImpl(Graph &src) {
             e.node->control_deps.clear();
 
             //add convRelu entry to node's inputs
-            node->inputs.pop_back();
-            node->inputs.emplace_back(conv_entry);
+//            node->inputs.pop_back();
+//            node->inputs.emplace_back(conv_entry);
+      e = conv_entry;
+      std::cout << "replace op conv+relu with convRelu " << std::endl;
 
           }
+      else if(e_second_layer.node->op() != nullptr
+            && e_second_layer.node->op()->name == "BatchNorm") {
+              for (auto& e_third_layer : e_second_layer.node->inputs) {
+          if (e_third_layer.node->op() != nullptr
+          && e_third_layer.node->op()->name == "Convolution") {
+          std::cout << "find conv->bn->relu " << std::endl;
+          std::cout<<"their names are "<<e_third_layer.node->attrs.name<<"->"
+            <<e_second_layer.node->attrs.name<<"->"<<e.node->attrs.name
+            <<std::endl;
+          for(unsigned int i=0; i<e.node->inputs.size();i++)
+            {
+              std::cout<<"relu paras are "<<i <<e.node->inputs[i].node->attrs.name<<std::endl;
+            }
+          for(unsigned int i=0; i<e_second_layer.node->inputs.size();i++)
+            {
+              std::cout<<"bn paras are "<<i <<e_second_layer.node->inputs[i].node->attrs.name<<std::endl;
+            }
+          for(unsigned int i=0; i<e_third_layer.node->inputs.size();i++)
+            {
+              std::cout<<"conv paras are "<<i <<e_third_layer.node->inputs[i].node->attrs.name<<std::endl;
+            }
+          std::string conv_node_name = e_third_layer.node->attrs.name;
+
+
+          
+      e_second_layer = e_second_layer.node->inputs[0];
+          //e = conv_entry;
+          //add convRelu entry to node's inputs
+/*            node->inputs.pop_back();
+          for(int i=0; i<node->inputs.size(); i++)
+          {
+            std::cout << "after pop_bak input " << i<< " is "
+              <<node->inputs[i].node->attrs.name <<std::endl;
+          }
+          node->inputs.emplace_back(conv_entry); */
+          for(int i=0; i<node->inputs.size(); i++)
+          {
+            std::cout << "after emplace_back input " << i<< " is "
+              <<node->inputs[i].node->attrs.name <<std::endl;
+          }
+          std::cout << "replace op conv+BN+relu with convRelu " << std::endl;
+          
+          }
+        }
+        }
         }
       }
     }
   });
   return src;
 }
+#endif
 
+
+#if 1
+Graph FusionGraphImpl(Graph &src) {
+  DFSVisit(src.outputs, [&](const NodePtr& node) {
+    //change conv->relu->node to convRelu->node 
+    for (auto& e : node->inputs) {
+      //find relu->node
+      if (e.node->op() != nullptr && e.node->op()->name == "Activation") {
+        for (const auto& e_second_layer : e.node->inputs) {
+          //find conv->relu->node
+          if (e_second_layer.node->op() != nullptr
+            && e_second_layer.node->op()->name == "Convolution") {
+            
+            std::string conv_node_name = e_second_layer.node->attrs.name;
+            std::string conv_relu_node_name = conv_node_name.replace(\
+              conv_node_name.find("convolution"), strlen("convolution"), "convolutionRelu");
+            NodePtr conv_relu_node = CreateNode("ConvolutionRelu", conv_relu_node_name);
+            NodeEntry conv_entry = NodeEntry{ conv_relu_node, 0, 0 };
+            //copy para
+            conv_relu_node->attrs.dict = e_second_layer.node->attrs.dict;
+
+            //now we only support relu as act_type
+            if (e.node->attrs.dict["act_type"] != "relu")
+            {
+              std::cout << "Warning: Activation " << e.node->attrs.dict["act_type"]
+                << "is not supported for ConvRelu! Use relu instead" << std::endl;
+            }
+
+            conv_relu_node->op()->attr_parser(&(conv_relu_node->attrs));
+
+            //copy nodeEntry from conv's inputs to convRelu's inputs
+            for (const auto& conv_input_nodeEntry : e_second_layer.node->inputs) {
+              conv_relu_node->inputs.emplace_back(conv_input_nodeEntry);
+            }
+
+            //clear conv node
+            e_second_layer.node->inputs.clear();
+            e_second_layer.node->control_deps.clear();
+
+            //clear relu node
+            e.node->inputs.clear();
+            e.node->control_deps.clear();
+
+            //add convRelu entry to node's inputs
+//            node->inputs.pop_back();
+//            node->inputs.emplace_back(conv_entry);
+      e = conv_entry;
+      std::cout << "replace op conv+relu with convRelu " << std::endl;
+
+          }
+      else if(e_second_layer.node->op() != nullptr
+            && e_second_layer.node->op()->name == "BatchNorm") {
+              for (auto& e_third_layer : e_second_layer.node->inputs) {
+          if (e_third_layer.node->op() != nullptr
+          && e_third_layer.node->op()->name == "Convolution") {
+          std::cout << "find conv->bn->relu " << std::endl;
+          std::cout<<"their names are "<<e_third_layer.node->attrs.name<<"->"
+            <<e_second_layer.node->attrs.name<<"->"<<e.node->attrs.name
+            <<std::endl;
+          for(unsigned int i=0; i<e_second_layer.node->inputs.size();i++)
+            {
+              std::cout<<"bn paras are "<<i <<e_second_layer.node->inputs[i].node->attrs.name<<std::endl;
+            }
+      
+          std::string conv_node_name = e_third_layer.node->attrs.name;
+          std::string conv_relu_node_name;
+          if(conv_node_name.find("conv") != std::string::npos)
+          {
+            conv_relu_node_name = conv_node_name.replace(\
+              conv_node_name.find("conv"), strlen("conv"), "convBNRelu");
+          }
+          else
+          {
+            conv_relu_node_name = "convBNRelu";
+          }
+          NodePtr conv_relu_node = CreateNode("ConvolutionRelu", conv_relu_node_name);
+          NodeEntry conv_entry = NodeEntry{ conv_relu_node, 0, 0 };
+
+          //copy para
+          conv_relu_node->attrs.dict = e_third_layer.node->attrs.dict;
+
+          conv_relu_node->op()->attr_parser(&(conv_relu_node->attrs));
+
+          //copy nodeEntry from conv's inputs to convRelu's inputs
+          for (auto& conv_input_nodeEntry : e_third_layer.node->inputs) {
+            if(conv_input_nodeEntry.node->attrs.name.find("weight") != std::string::npos){
+                 conv_input_nodeEntry.node->attrs.name.insert(0,"convBNReluPara_");
+            }
+            conv_relu_node->inputs.emplace_back(conv_input_nodeEntry);
+          }
+
+
+          //clear conv node
+          e_third_layer.node->inputs.clear();
+          e_third_layer.node->control_deps.clear();
+          
+          //clear BN node
+          e_second_layer.node->inputs.clear();
+          e_second_layer.node->control_deps.clear();
+          
+          //clear relu node
+          e.node->inputs.clear();
+          e.node->control_deps.clear();
+
+          std::cout << "input size" << node->inputs.size()<<std::endl;
+
+          for(int i=0; i<node->inputs.size(); i++)
+          {
+            std::cout << "input " << i<< " is "
+              <<node->inputs[i].node->attrs.name <<std::endl;
+          }
+
+                    
+          e = conv_entry;
+          //add convRelu entry to node's inputs
+/*            node->inputs.pop_back();
+          for(int i=0; i<node->inputs.size(); i++)
+          {
+            std::cout << "after pop_bak input " << i<< " is "
+              <<node->inputs[i].node->attrs.name <<std::endl;
+          }
+          node->inputs.emplace_back(conv_entry); */
+          for(int i=0; i<node->inputs.size(); i++)
+          {
+            std::cout << "after emplace_back input " << i<< " is "
+              <<node->inputs[i].node->attrs.name <<std::endl;
+          }
+          std::cout << "replace op conv+BN+relu with convRelu " << std::endl;
+          
+          }
+        }
+        }
+        }
+      }
+    }
+  });
+  return src;
+}
+#endif
 Graph FusionGraph(Graph &&src) {
   return FusionGraphImpl(src);
 }
 
 Graph QuantizeGraph(Graph &&src) {
   return FusionGraphImpl(src);
+#if 0
+DFSVisit(src.outputs, [&](const NodePtr& node) {
+     std::cout<<"name is "<<node->attrs.name<<std::endl;
+});
+return src;
+#endif
 #if 0 
   static auto& quantized_op_map = Op::GetAttr<mxnet::FQuantizedOp>("FQuantizedOp");
   static auto& need_requantize_map = Op::GetAttr<mxnet::FNeedRequantize>("FNeedRequantize");
@@ -385,4 +580,6 @@ NNVM_REGISTER_PASS(SetCalibTableToQuantizedGraph)
 
 }  // namespace op
 }  // namespace mxnet
+
+
 

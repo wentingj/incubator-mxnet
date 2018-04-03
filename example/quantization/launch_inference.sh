@@ -18,11 +18,11 @@
 # under the License.
 
 #python imagenet_inference.py --symbol-file=conv_mnist-symbol.json --param-file=conv_mnist-0010.params --rgb-mean=0,0,0 --num-skipped-batches=0 --num-inference-batches=1 --dataset=./data/val_256_q90.rec
-python imagenet_inference.py --symbol-file=conv_mnist-quantized-symbol.json --param-file=conv_mnist-quantized-0010.params --rgb-mean=0,0,0 --num-skipped-batches=0 --num-inference-batches=1 --dataset=./data/val_256_q90.rec
+#python imagenet_inference.py --symbol-file=conv_mnist-quantized-symbol.json --param-file=conv_mnist-quantized-0010.params --rgb-mean=0,0,0 --num-skipped-batches=0 --num-inference-batches=1 --dataset=./data/val_256_q90.rec
 
 #python imagenet_inference.py --symbol-file=./model/imagenet1k-resnet-152-symbol.json --param-file=./model/imagenet1k-resnet-152-0000.params --rgb-mean=0,0,0 --num-skipped-batches=50 --num-inference-batches=500 --dataset=./data/val_256_q90.rec
 #
-#python imagenet_inference.py --symbol-file=./model/imagenet1k-resnet-152-quantized-symbol.json --param-file=./model/imagenet1k-resnet-152-quantized-0000.params --rgb-mean=0,0,0 --num-skipped-batches=50 --num-inference-batches=500 --dataset=./data/val_256_q90.rec
+python imagenet_inference.py --symbol-file=./model/imagenet1k-resnet-152-quantized-symbol.json --param-file=./model/imagenet1k-resnet-152-quantized-0000.params --rgb-mean=0,0,0 --num-skipped-batches=50 --num-inference-batches=500 --dataset=./data/val_256_q90.rec 2>&1 | tee resnet_152_inference.log
 #
 #python imagenet_inference.py --symbol-file=./model/imagenet1k-resnet-152-quantized-5batches-naive-symbol.json --param-file=./model/imagenet1k-resnet-152-quantized-0000.params --rgb-mean=0,0,0 --num-skipped-batches=50 --num-inference-batches=500 --dataset=./data/val_256_q90.rec
 #python imagenet_inference.py --symbol-file=./model/imagenet1k-resnet-152-quantized-10batches-naive-symbol.json --param-file=./model/imagenet1k-resnet-152-quantized-0000.params --rgb-mean=0,0,0 --num-skipped-batches=50 --num-inference-batches=500 --dataset=./data/val_256_q90.rec

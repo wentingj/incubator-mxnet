@@ -24,7 +24,7 @@
 */
 
 #if MXNET_USE_MKLDNN == 1
-
+ 
 #include "../convolution_relu-inl.h"
 #include "./mkldnn_ops-inl.h"
 #include "./mkldnn_base-inl.h"

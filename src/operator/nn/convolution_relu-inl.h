@@ -44,11 +44,21 @@ struct ConvolutionReluParam : public dmlc::Parameter<ConvolutionReluParam> {
   uint32_t num_group;
   uint64_t workspace;
   bool no_bias;
+  dmlc::optional<int> cudnn_tune;
+  bool cudnn_off;
   dmlc::optional<int> layout;
 
   // use  for relu
   float slope;
 
+  // use for bn
+  bool bn_fusion;
+  float bn_gamma;
+  float bn_beta;
+  float bn_mean;
+  float bn_var;
+  float bn_eps;
+  
   DMLC_DECLARE_PARAMETER(ConvolutionReluParam) {
     DMLC_DECLARE_FIELD(kernel).describe("Convolution kernel size: (h, w) or (d, h, w)");
     DMLC_DECLARE_FIELD(stride).set_default(TShape())
@@ -65,6 +75,14 @@ struct ConvolutionReluParam : public dmlc::Parameter<ConvolutionReluParam> {
     .describe("Maximum temporary workspace allowed for convolution (MB).");
     DMLC_DECLARE_FIELD(no_bias).set_default(false)
     .describe("Whether to disable bias parameter.");
+    DMLC_DECLARE_FIELD(cudnn_tune)
+    .add_enum("off", conv::kOff)
+    .add_enum("limited_workspace", conv::kLimited)
+    .add_enum("fastest", conv::kFastest)
+    .set_default(dmlc::optional<int>())
+        .describe("Whether to pick convolution algo by running performance test.");
+    DMLC_DECLARE_FIELD(cudnn_off).set_default(false)
+    .describe("Turn off cudnn for this layer.");
     DMLC_DECLARE_FIELD(layout)
     .add_enum("NCW", mshadow::kNCW)
     .add_enum("NCHW", mshadow::kNCHW)
@@ -75,6 +93,18 @@ struct ConvolutionReluParam : public dmlc::Parameter<ConvolutionReluParam> {
     .describe("Set layout for input, output and weight. Empty for\n    "
               "default layout: NCW for 1d, NCHW for 2d and NCDHW for 3d.");
     DMLC_DECLARE_FIELD(slope).set_default(0)
+    .describe("Init slope for the activation. ");
+    DMLC_DECLARE_FIELD(bn_fusion).set_default(false)
+    .describe("Init slope for the activation. ");
+    DMLC_DECLARE_FIELD(bn_gamma).set_default(0)
+    .describe("Init slope for the activation. ");
+    DMLC_DECLARE_FIELD(bn_beta).set_default(0)
+    .describe("Init slope for the activation. ");
+    DMLC_DECLARE_FIELD(bn_mean).set_default(0)
+    .describe("Init slope for the activation. ");
+    DMLC_DECLARE_FIELD(bn_var).set_default(0)
+    .describe("Init slope for the activation. ");
+    DMLC_DECLARE_FIELD(bn_eps).set_default(0)
     .describe("Init slope for the activation. ");
   }
   // Adjusts kernel size for effects of dilation in the dimension `dim`.
@@ -101,4 +131,5 @@ struct ConvolutionReluParam : public dmlc::Parameter<ConvolutionReluParam> {
 
 #endif  // MXNET_USE_MKLDNN == 1
 #endif  // MXNET_OPERATOR_NN_CONVOLUTION_RELU_INL_H_
+
 

@@ -37,7 +37,7 @@ from .context import cpu, Context
 from .module import Module
 
 
-def _quantize_params(qsym, params):
+def _quantize_params(qsym, params,aux_params):
     """Given a quantized symbol and a dict of params that have not been quantized, generate quantized params.
     Currently only supports quantizing the arg_params with names of `weight` or `bias`, not aux_params.
     If `qsym` contains symbols that are excluded from being quantized, their corresponding params will
@@ -52,6 +52,66 @@ def _quantize_params(qsym, params):
     inputs_name = qsym.list_arguments()
     quantized_params = {}
     for name in inputs_name:
+        if name.startswith('convBNReluPara_'):
+            print "para name is ",name            
+            original_name = name[len('convBNReluPara_'):]
+            print "original_name is ",original_name
+            if original_name.endswith('conv0_weight'):
+                bn_num = 'bn0'
+            elif original_name.endswith('conv1_weight'):
+              bn_num = 'bn2'
+            elif original_name.endswith('conv2_weight'):
+                bn_num = 'bn3'
+            stage_unit_name = original_name[:-len('convX_weight')]
+            bn_gamma_name = stage_unit_name + bn_num + '_gamma'
+            bn_beta_name = stage_unit_name + bn_num + '_beta'
+            bn_moving_mean_name = stage_unit_name + bn_num + '_moving_mean'
+            bn_moving_var_name = stage_unit_name + bn_num + '_moving_var'
+            bn_gamma = params[bn_gamma_name]
+            bn_beta = params[bn_beta_name]
+            bn_moving_mean = aux_params[bn_moving_mean_name]
+            bn_moving_var = aux_params[bn_moving_var_name]
+
+            conv_weight = params[original_name]
+#            conv_bias_name = original_name[:-len('weight')] + 'bias'
+#            if(params.has_key(conv_bias_name)):
+#                conv_bias = params[conv_bias_name]
+
+            print type(conv_weight),len(conv_weight),conv_weight.shape,bn_gamma.shape,bn_beta.shape,bn_moving_mean.shape,bn_moving_var.shape
+            
+            print "bn para is ",bn_gamma_name,bn_beta_name,bn_moving_mean_name,bn_moving_var_name
+
+            conv_weight_after_bn = conv_weight
+            print type(bn_moving_var[0])," value is ", bn_moving_var[0]
+            for i in range (len(conv_weight)):
+                conv_weight_after_bn[i,:,:,:] = conv_weight[i,:,:,:]*bn_gamma[i]/NDArray.sqrt(bn_moving_var[i] + 2e-05)
+            print "save original_name is ",original_name   
+            quantized_params[name] = conv_weight_after_bn;
+        elif name in params:
+            print "name is ", name
+            quantized_params[name] = params[name]
+#    for k, v in params.items():
+#         print "params key are ",k
+#    for k, v in aux_params.items():
+#         print "aux_params name is ",k 
+#         print "aux_params name is ",k ," val are ", v
+    return quantized_params
+"""
+def _quantize_params(qsym, params):
+    Given a quantized symbol and a dict of params that have not been quantized, generate quantized params.
+    Currently only supports quantizing the arg_params with names of `weight` or `bias`, not aux_params.
+    If `qsym` contains symbols that are excluded from being quantized, their corresponding params will
+    not be quantized, but saved together with quantized params of the symbols that have been quantized.
+
+    Parameters
+    ----------
+    qsym : Symbol
+        Quantized symbol from FP32 symbol.
+    params : dict of str->NDArray
+    
+    inputs_name = qsym.list_arguments()
+    quantized_params = {}
+    for name in inputs_name:
         if name.endswith(('weight_quantize', 'bias_quantize')):
             original_name = name[:-len('_quantize')]
             param = params[original_name]
@@ -63,7 +123,7 @@ def _quantize_params(qsym, params):
         elif name in params:
             quantized_params[name] = params[name]
     return quantized_params
-
+"""
 
 def _quantize_symbol(sym, excluded_symbols=None, offline_params=None):
     """Given a symbol object representing a neural network of data type FP32, quantize it into a INT8 network.
@@ -432,7 +492,8 @@ def get_quantized_model(sym, params, excluded_sym_names=None,
     qsym = _quantize_symbol(sym, excluded_symbols=excluded_syms, offline_params=arg_params.keys())
 
     logger.info('Quantizing parameters')
-    qarg_params = _quantize_params(qsym, arg_params)
+#    qarg_params = _quantize_params(qsym, arg_params)
+    qarg_params = _quantize_params(qsym, arg_params,aux_params)
 
     if calib_mode is not None and calib_mode != 'none':
         if not isinstance(ctx, Context):
@@ -465,3 +526,4 @@ def get_quantized_model(sym, params, excluded_sym_names=None,
         qsym = _calibrate_quantized_sym(qsym, th_dict)
 
     return qsym, qarg_params, aux_params
+
