@@ -19,8 +19,10 @@
  * \author Wenting Jiang
  * \brief
  */
+
 #ifndef MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_DEQUANTIZE_INL_H_
 #define MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_DEQUANTIZE_INL_H_
+#if MXNET_USE_MKLDNN == 1
 #include <string>
 #include <algorithm>
 #include <vector>
@@ -57,7 +59,7 @@ void MKLDNNDequantizeComputeKer(const std::vector<TBlob>& inputs,
   float scale = real_range / quantized_range;
 
   primitive_attr attr;
-  int mask = 0;
+  const int mask = 0;
   std::vector<float> scales = {scale};
   attr.set_output_scales(mask, scales);
   attr.set_int_output_round_mode(round_nearest);
@@ -93,4 +95,6 @@ void MKLDNNDequantizeCompute(const nnvm::NodeAttrs& attrs,
 
 }  // namespace op
 }  // namespace mxnet
+
+#endif  // MXNET_USE_MKLDNN == 1
 #endif  // MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_DEQUANTIZE_INL_H_

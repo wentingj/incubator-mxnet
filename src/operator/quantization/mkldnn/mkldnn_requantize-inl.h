@@ -18,8 +18,10 @@
  * \brief
  * \author Jin Huang
  */
+
 #ifndef MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_REQUANTIZE_INL_H_
 #define MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_REQUANTIZE_INL_H_
+#if MXNET_USE_MKLDNN == 1
 #include <string>
 #include <algorithm>
 #include <vector>
@@ -66,7 +68,7 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
   float scale = first_scale * second_scale;
 
   primitive_attr attr;
-  int mask = 0;
+  const int mask = 0;
   std::vector<float> scales = {scale};
   attr.set_output_scales(mask, scales);
   attr.set_int_output_round_mode(round_nearest);
@@ -150,4 +152,6 @@ void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
 
 }  // namespace op
 }  // namespace mxnet
+
+#endif  // MXNET_USE_MKLDNN == 1
 #endif  // MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_REQUANTIZE_INL_H_

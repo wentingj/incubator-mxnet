@@ -86,5 +86,6 @@ void MKLDNNQuantizedPoolingForward(const nnvm::NodeAttrs& attrs,
                                    const std::vector<NDArray> &out_data);
 }  // namespace op
 }  // namespace mxnet
+
 #endif  // MXNET_USE_MKLDNN == 1
 #endif  // MXNET_OPERATOR_QUANTIZATION_MKLDNN_MKLDNN_QUANTIZED_POOLING_INL_H_

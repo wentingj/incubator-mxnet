@@ -176,43 +176,47 @@ void MKLDNNQuantizedConvForward(const nnvm::NodeAttrs& attrs, const OpContext &c
                                const std::vector<NDArray> &in_data,
                                const std::vector<OpReqType> &req,
                                const std::vector<NDArray> &out_data) {
-  TmpMemMgr::Get()->Init(ctx.requested[conv::kTempSpace]);
-  const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
-  NDArray weight = in_data[conv::kWeight];
-  MKLDNNConvForward &fwd = GetConvFwd(attrs, in_data[conv::kData], weight,
-      param.no_bias ? nullptr : &in_data[conv::kBias], out_data[conv::kOut]);
+  if (in_data[0].dtype() == mshadow::kUint8) {
+    TmpMemMgr::Get()->Init(ctx.requested[conv::kTempSpace]);
+    const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
+    NDArray weight = in_data[conv::kWeight];
+    MKLDNNConvForward &fwd = GetConvFwd(attrs, in_data[conv::kData], weight,
+        param.no_bias ? nullptr : &in_data[conv::kBias], out_data[conv::kOut]);
 
-  auto data_mem = in_data[conv::kData].GetMKLDNNDataReorder(fwd.fwd_pd.src_primitive_desc());
-  const mkldnn::memory *weight_mem;
-  // For inference, we want to reorder the weight array so we don't need to
-  // reorder data every time.
-  if (weight.IsDefaultData()) {
-    weight_mem = GetWeights(weight, fwd.fwd_pd.weights_primitive_desc(), param.num_group);
-    // We also need to modify the layout on the original weight array. The
-    // data conversion happens after the weight array is used.
-    weight.MKLDNNDataReorderAsync(fwd.fwd_pd.weights_primitive_desc());
+    auto data_mem = in_data[conv::kData].GetMKLDNNDataReorder(fwd.fwd_pd.src_primitive_desc());
+    const mkldnn::memory *weight_mem;
+    // For inference, we want to reorder the weight array so we don't need to
+    // reorder data every time.
+    if (weight.IsDefaultData()) {
+      weight_mem = GetWeights(weight, fwd.fwd_pd.weights_primitive_desc(), param.num_group);
+      // We also need to modify the layout on the original weight array. The
+      // data conversion happens after the weight array is used.
+      weight.MKLDNNDataReorderAsync(fwd.fwd_pd.weights_primitive_desc());
+    } else {
+      weight_mem = weight.GetMKLDNNData();
+      CHECK(weight_mem->get_primitive_desc() == fwd.fwd_pd.weights_primitive_desc());
+    }
+    auto out_mem = CreateMKLDNNMem(out_data[conv::kOut], fwd.fwd_pd.dst_primitive_desc(),
+                                   req[conv::kOut]);
+    const mkldnn::memory *bias_mem = nullptr;
+    if (!param.no_bias)
+      bias_mem = in_data[conv::kBias].GetMKLDNNDataReorder(fwd.fwd_pd.bias_primitive_desc());
+    fwd.SetNewMem(*data_mem, *weight_mem, bias_mem, *out_mem.second);
+    MKLDNNStream::Get()->RegisterPrim(fwd.GetFwd());
+
+    CommitOutput(out_data[conv::kOut], out_mem);
+    MKLDNNStream::Get()->Submit();
+    Stream<cpu> *s = ctx.get_stream<cpu>();
+    const size_t num_inputs = param.no_bias ? 2 : 3;
+    mxnet_op::Kernel<QuantizationRangeForMultiplicationStruct, cpu>::Launch(s, 1,
+             out_data[1].data().dptr<float>(), out_data[2].data().dptr<float>(),
+             in_data[num_inputs].data().dptr<float>(),
+             in_data[num_inputs+1].data().dptr<float>(),
+             in_data[num_inputs+2].data().dptr<float>(),
+             in_data[num_inputs+3].data().dptr<float>());
   } else {
-    weight_mem = weight.GetMKLDNNData();
-    CHECK(weight_mem->get_primitive_desc() == fwd.fwd_pd.weights_primitive_desc());
+    LOG(FATAL) << "mkldnn_quantized_conv op only supports uint8 as input type";
   }
-  auto out_mem = CreateMKLDNNMem(out_data[conv::kOut], fwd.fwd_pd.dst_primitive_desc(),
-                                 req[conv::kOut]);
-  const mkldnn::memory *bias_mem = nullptr;
-  if (!param.no_bias)
-    bias_mem = in_data[conv::kBias].GetMKLDNNDataReorder(fwd.fwd_pd.bias_primitive_desc());
-  fwd.SetNewMem(*data_mem, *weight_mem, bias_mem, *out_mem.second);
-  MKLDNNStream::Get()->RegisterPrim(fwd.GetFwd());
-
-  CommitOutput(out_data[conv::kOut], out_mem);
-  MKLDNNStream::Get()->Submit();
-  Stream<cpu> *s = ctx.get_stream<cpu>();
-  const size_t num_inputs = param.no_bias ? 2 : 3;
-  mxnet_op::Kernel<QuantizationRangeForMultiplicationStruct, cpu>::Launch(s, 1,
-           out_data[1].data().dptr<float>(), out_data[2].data().dptr<float>(),
-           in_data[num_inputs].data().dptr<float>(),
-           in_data[num_inputs+1].data().dptr<float>(),
-           in_data[num_inputs+2].data().dptr<float>(),
-           in_data[num_inputs+3].data().dptr<float>());
 }
 
 NNVM_REGISTER_OP(_contrib_quantized_conv)
