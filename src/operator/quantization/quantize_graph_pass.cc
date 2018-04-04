@@ -276,15 +276,31 @@ Graph FusionGraphImpl(Graph &src) {
 
           //copy para
           conv_relu_node->attrs.dict = e_third_layer.node->attrs.dict;
-
+                    std::cout <<"no_bias is " << conv_relu_node->attrs.dict["no_bias"] << std::endl;
+          conv_relu_node->attrs.dict["no_bias"] = "False";
           conv_relu_node->op()->attr_parser(&(conv_relu_node->attrs));
 
-          //copy nodeEntry from conv's inputs to convRelu's inputs
-          for (auto& conv_input_nodeEntry : e_third_layer.node->inputs) {
-            if(conv_input_nodeEntry.node->attrs.name.find("weight") != std::string::npos){
-                 conv_input_nodeEntry.node->attrs.name.insert(0,"convBNReluPara_");
+          bool find_bias = false;
+          std::string bias_name;
+              for (auto& conv_input_nodeEntry : e_third_layer.node->inputs) {
+            if (conv_input_nodeEntry.node->attrs.name.find("weight") != std::string::npos) {
+              std::string& weight_name = conv_input_nodeEntry.node->attrs.name;
+              bias_name = weight_name;
+              bias_name.replace(bias_name.find("weight"),strlen("weight"), "bias");
+              std::cout<<"bias name is "<<bias_name<<std::endl;
+              weight_name.insert(0, "convBNReluPara_");
+            }
+            if (conv_input_nodeEntry.node->attrs.name.find("bias") != std::string::npos) {
+              find_bias = true;
             }
             conv_relu_node->inputs.emplace_back(conv_input_nodeEntry);
+              }
+
+          if (!find_bias)
+          {
+            NodePtr conv_relu_bias_node = CreateNode("nullptr", bias_name);
+            NodeEntry conv_bias_entry = NodeEntry{ conv_relu_bias_node, 0, 0 };
+            conv_relu_node->inputs.emplace_back(conv_bias_entry);
           }
 
 
