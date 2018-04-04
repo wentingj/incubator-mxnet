@@ -146,6 +146,25 @@ inline bool QuantizeType(const nnvm::NodeAttrs& attrs,
   return (*in_attrs)[0] != -1;
 }
 
+//bool QuantizeStorageType(const nnvm::NodeAttrs& attrs,
+//                         const int dev_mask,
+//                         DispatchMode* dispatch_mode,
+//                         std::vector<int> *in_attrs,
+//                         std::vector<int> *out_attrs) {
+//#if MXNET_USE_MKLDNN == 1
+//  *dispatch_mode = DispatchMode::kFComputeEx;
+//  if (dev_mask == mshadow::cpu::kDevMask)
+//    *dispatch_mode = DispatchMode::kFComputeEx;
+//  else
+//#endif
+//    *dispatch_mode = DispatchMode::kFCompute;
+//
+//  (*out_attrs)[0] = kDefaultStorage;
+//  (*out_attrs)[1] = kDefaultStorage;
+//  (*out_attrs)[2] = kDefaultStorage;
+//  return true;
+//}
+
 }  // namespace op
 }  // namespace mxnet
 #endif  // MXNET_OPERATOR_QUANTIZATION_QUANTIZE_INL_H_

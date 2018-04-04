@@ -76,7 +76,7 @@ void MKLDNNDequantizeComputeKer(const std::vector<TBlob>& inputs,
   auto input = memory(i_mpd, inputs[0].dptr<SrcType>());
   auto output = memory(o_mpd, outputs[0].dptr<DstType>());
   auto r = reorder(reorder_pd, input, output);
-  stream(stream::kind::lazy).submit({r}).wait();
+  MKLDNNStream::Get()->Submit();
 }
 
 void MKLDNNDequantizeCompute(const nnvm::NodeAttrs& attrs,
