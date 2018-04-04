@@ -79,21 +79,22 @@ def _quantize_params(qsym, params,aux_params):
                 conv_bias = params[conv_bias_name]
             else:
                 conv_bias = nd.zeros_like(bn_gamma)
-            print "conv_bias_type ", type(conv_bias[0]),conv_bias.shape,conv_bias
-            print type(conv_weight),len(conv_weight),conv_weight.shape,bn_gamma.shape,bn_beta.shape,bn_moving_mean.shape,bn_moving_var.shape
+#            print "conv_bias_type ", type(conv_bias[0]),conv_bias.shape,conv_bias
+ #           print type(conv_weight),len(conv_weight),conv_weight.shape,bn_gamma.shape,bn_beta.shape,bn_moving_mean.shape,bn_moving_var.shape
             
-            print "bn para is ",bn_gamma_name,bn_beta_name,bn_moving_mean_name,bn_moving_var_name
+  #          print "bn para is ",bn_gamma_name,bn_beta_name,bn_moving_mean_name,bn_moving_var_name
 
             conv_weight_after_bn = conv_weight
             print type(bn_moving_var[0])," value is ", bn_moving_var[0]
             for i in range (len(conv_weight)):
                 conv_weight_after_bn[i,:,:,:] = conv_weight[i,:,:,:]*bn_gamma[i]/NDArray.sqrt(bn_moving_var[i] + 2e-05)
-            print "save original_name is ",original_name   
+                conv_bias[i] = (conv_bias[i] - bn_moving_mean[i])*bn_gamma[i]/NDArray.sqrt(bn_moving_var[i] + 2e-05) + bn_beta[i]
+   #         print "save original_name is ",original_name   
             quantized_params[name] = conv_weight_after_bn;
             quantized_params[conv_bias_name] = conv_bias
-            print "bias shape is ",conv_bias.shape
+    #        print "bias shape is ",conv_bias.shape
         elif name in params:
-            print "name is ", name
+     #       print "name is ", name
             quantized_params[name] = params[name]
 #    for k, v in params.items():
 #         print "params key are ",k
