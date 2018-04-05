@@ -83,11 +83,11 @@ where
 .set_attr<nnvm::FInferShape>("FInferShape", QuantizeShape)
 .set_attr<nnvm::FInferType>("FInferType", QuantizeType)
 .set_attr<FInferStorageType>("FInferStorageType", QuantizeStorageType)
-//#if MXNET_USE_MKLDNN == 1
-//.set_attr<FComputeEx>("FComputeEx<cpu>", MKLDNNQuantizeCompute)
-//#else
+#if MXNET_USE_MKLDNN == 1
+.set_attr<FComputeEx>("FComputeEx<cpu>", MKLDNNQuantizeCompute)
+#else
 .set_attr<FCompute>("FCompute<cpu>", QuantizeCompute<cpu>)
-//#endif
+#endif
 .add_argument("data", "NDArray-or-Symbol", "A ndarray/symbol of type `float32`")
 .add_argument("min_range", "NDArray-or-Symbol", "The minimum scalar value "
   "possibly produced for the input")

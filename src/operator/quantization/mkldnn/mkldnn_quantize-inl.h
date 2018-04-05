@@ -41,21 +41,22 @@ void MKLDNNQuantizeComputeKer(const std::vector<NDArray>& inputs,
   using namespace mxnet_op;
   using red::limits::MaxValue;
   using red::limits::MinValue;
-  float real_range = MaxAbs(*inputs[1].data().dptr<float>(), *inputs[2].data().dptr<float>());
-  float quantized_range = MaxAbs(MaxValue<DstType>(), MinValue<DstType>());
-  *outputs[1].data().dptr<float>() = *inputs[1].data().dptr<float>();
-  *outputs[2].data().dptr<float>() = *inputs[2].data().dptr<float>();
-  if (param.out_type == mshadow::kInt8) {
+  float real_range;
+  float quantized_range;
+  if (param.out_type == mshadow::kUint8) {
+    real_range = MaxAbs(*inputs[1].data().dptr<float>(), *inputs[2].data().dptr<float>());
+    quantized_range = MaxAbs(MaxValue<DstType>(), MinValue<DstType>());
+    *outputs[1].data().dptr<float>() = *inputs[1].data().dptr<float>();
+    *outputs[2].data().dptr<float>() = *inputs[2].data().dptr<float>();
+  } else if (param.out_type == mshadow::kInt8) {
     real_range = MaxAbs(*inputs[1].data().dptr<float>(), *inputs[2].data().dptr<float>());
     quantized_range = MinAbs(MaxValue<DstType>(), MinValue<DstType>());
     *outputs[1].data().dptr<float>() = -real_range;
     *outputs[2].data().dptr<float>() = real_range;
+  } else {
+    LOG(FATAL) << "mkldnn quantize op only supports int8 and uint8 as output type";
   }
   float scale = quantized_range / real_range;
-  std::cout<<"--MKLQuantizeComputeKerUint8: real_range="<<real_range<<std::endl;
-  std::cout<<"                       : inputs[1]="<<inputs[1].data().dptr<float>()[0]<<std::endl;
-  std::cout<<"                       : inputs[2]="<<inputs[2].data().dptr<float>()[0]<<std::endl;
-  std::cout<<"                       : quantized_range="<<quantized_range<<std::endl;
   primitive_attr attr;
   const int mask = 0;
   std::vector<float> scales = {scale};
@@ -83,9 +84,9 @@ void MKLDNNQuantizeComputeKer(const std::vector<NDArray>& inputs,
 }
 
 void MKLDNNQuantizeCompute(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
-                            const std::vector<NDArray> &inputs,
-                            const std::vector<OpReqType> &req,
-                            const std::vector<NDArray> &outputs) {
+                           const std::vector<NDArray> &inputs,
+                           const std::vector<OpReqType> &req,
+                           const std::vector<NDArray> &outputs) {
   const QuantizeParam& param = nnvm::get<QuantizeParam>(attrs.parsed);
   if (param.out_type == mshadow::kUint8) {
     MKLDNNQuantizeComputeKer<float, uint8_t>(inputs, outputs, param, req);

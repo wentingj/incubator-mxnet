@@ -86,7 +86,8 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
   auto input = memory(i_mpd, inputs[0].dptr<SrcDType>());
   auto output = memory(o_mpd, outputs[0].dptr<DstDType>());
   auto r = reorder(reorder_pd, input, output);
-  MKLDNNStream::Get()->Submit();
+  stream(stream::kind::lazy).submit({r}).wait();
+  //MKLDNNStream::Get()->Submit();
   *outputs[1].dptr<float>() = -second_real_range;
   *outputs[2].dptr<float>() = second_real_range;
 }

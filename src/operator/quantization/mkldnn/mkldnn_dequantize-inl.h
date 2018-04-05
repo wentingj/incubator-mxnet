@@ -32,62 +32,59 @@ namespace mxnet {
 namespace op {
 
 template<typename SrcType, typename DstType>
-void MKLDNNDequantizeComputeKer(const std::vector<TBlob>& inputs,
-                                const std::vector<TBlob>& outputs) {
+void MKLDNNDequantizeComputeKer(const std::vector<NDArray> &inputs,
+                                const std::vector<NDArray> &outputs,
+                                const std::vector<OpReqType> &req) {
   using namespace mshadow;
   using namespace mxnet_op;
   using red::limits::MaxValue;
   using red::limits::MinValue;
-  // check shapes
-  size_t i_dim = inputs[0].ndim();
-  size_t o_dim = outputs[0].ndim();
-  CHECK_EQ(i_dim, o_dim);
-  int total_len = 1;
-  memory::dims tensor_shape;
-  for (size_t i = 0; i < i_dim; ++i) {
-    CHECK_EQ(inputs[0].size(i), outputs[0].size(i));
-    total_len *= inputs[0].size(i);
-  }
-  tensor_shape.push_back(total_len);
-
-  float quantized_range = MaxAbs(MaxValue<SrcType>(), MinValue<SrcType>());
-  float real_range = MaxAbs(*inputs[1].dptr<DstType>(), *inputs[2].dptr<DstType>());
-  if (inputs[0].type_flag_ == mshadow::kInt8) {
+  float real_range;
+  float quantized_range;
+  if (inputs[0].dtype() == mshadow::kUint8) {
+    quantized_range = MaxAbs(MaxValue<SrcType>(), MinValue<SrcType>());
+    real_range = MaxAbs(*inputs[1].data().dptr<DstType>(), *inputs[2].data().dptr<DstType>());
+  } else if (inputs[0].dtype() == mshadow::kInt8) {
     quantized_range = MinAbs(MaxValue<SrcType>(), MinValue<SrcType>());
-    real_range = MaxAbs(*inputs[1].dptr<DstType>(), *inputs[2].dptr<DstType>());
+    real_range = MaxAbs(*inputs[1].data().dptr<DstType>(), *inputs[2].data().dptr<DstType>());
+  } else {
+    LOG(FATAL) << "mkldnn dequantize op only supports int8 and uint8 as output type";
   }
   float scale = real_range / quantized_range;
-
   primitive_attr attr;
   const int mask = 0;
   std::vector<float> scales = {scale};
   attr.set_output_scales(mask, scales);
   attr.set_int_output_round_mode(round_nearest);
   mkldnn::engine cpu_engine = mxnet::CpuEngine::Get()->get_engine();
-  auto i_mpd = memory::primitive_desc({tensor_shape,
-                                       (mkldnn::memory::data_type)data_type_enum<SrcType>::type,
-                                       memory::format::x},
-                                       cpu_engine);
-  auto o_mpd = memory::primitive_desc({tensor_shape,
-                                       (mkldnn::memory::data_type)data_type_enum<DstType>::type,
-                                       memory::format::x},
-                                       cpu_engine);
-  auto reorder_pd = reorder::primitive_desc(i_mpd, o_mpd, attr);
-  auto input = memory(i_mpd, inputs[0].dptr<SrcType>());
-  auto output = memory(o_mpd, outputs[0].dptr<DstType>());
-  auto r = reorder(reorder_pd, input, output);
+  auto i_mem = inputs[0].GetMKLDNNData();
+  auto i_mpd = i_mem->get_primitive_desc();
+  auto i_desc = i_mpd.desc();
+  size_t i_ndim = inputs[0].shape().ndim();
+  mkldnn::memory::dims i_dims = mkldnn::memory::dims(i_ndim);
+  for(size_t i = 0; i < i_ndim; i++) {
+    i_dims[i] = static_cast<int>(inputs[0].shape()[i]);
+  }
+  mkldnn::memory::format i_fmt = static_cast<mkldnn::memory::format>(i_desc.data.format);
+  auto o_desc = mkldnn::memory::desc(i_dims,
+                                    (mkldnn::memory::data_type)data_type_enum<DstType>::type,
+                                    i_fmt);
+  auto o_mpd = memory::primitive_desc(o_desc, cpu_engine);
+  auto reorder_pd  = reorder::primitive_desc(i_mpd, o_mpd, attr);
+  auto o_mem = CreateMKLDNNMem(outputs[0], o_mpd, req[0]);
+  MKLDNNStream::Get()->RegisterPrim(mkldnn::reorder(reorder_pd, *i_mem, *o_mem.second));
+  CommitOutput(outputs[0], o_mem);
   MKLDNNStream::Get()->Submit();
 }
 
-void MKLDNNDequantizeCompute(const nnvm::NodeAttrs& attrs,
-                             const OpContext& ctx,
-                             const std::vector<TBlob>& inputs,
-                             const std::vector<OpReqType>& req,
-                             const std::vector<TBlob>& outputs) {
-  if (inputs[0].type_flag_ == mshadow::kUint8) {
-    MKLDNNDequantizeComputeKer<uint8_t, float>(inputs, outputs);
-  } else if (inputs[0].type_flag_ == mshadow::kInt8) {
-    MKLDNNDequantizeComputeKer<int8_t, float>(inputs, outputs);
+void MKLDNNDequantizeCompute(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
+                             const std::vector<NDArray> &inputs,
+                             const std::vector<OpReqType> &req,
+                             const std::vector<NDArray> &outputs) {
+  if (inputs[0].dtype() == mshadow::kUint8) {
+    MKLDNNDequantizeComputeKer<uint8_t, float>(inputs, outputs, req);
+  } else if (inputs[0].dtype() == mshadow::kInt8) {
+    MKLDNNDequantizeComputeKer<int8_t, float>(inputs, outputs, req);
   } else {
     LOG(FATAL) << "dequantize op only supports int8 and uint8 as input type";
   }
