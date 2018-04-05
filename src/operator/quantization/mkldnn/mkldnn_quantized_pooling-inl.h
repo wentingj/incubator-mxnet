@@ -38,14 +38,14 @@ namespace op {
 class MKLDNNQuantizedPoolingFwd {
  public:
   MKLDNNQuantizedPoolingFwd(const mxnet::NDArray &input,
-                   const mxnet::NDArray &output,
-                   const int kernel_h, const int kernel_w,
-                   const int stride_h, const int stride_w,
-                   const int padding_t, const int padding_b,
-                   const int padding_l, const int padding_r,
-                   const mkldnn::algorithm alg_kind) :
-                   alg_kind_(alg_kind),
-                   fwd_(nullptr), data_(nullptr), out_(nullptr) {
+                            const mxnet::NDArray &output,
+                            const int kernel_h, const int kernel_w,
+                            const int stride_h, const int stride_w,
+                            const int padding_t, const int padding_b,
+                            const int padding_l, const int padding_r,
+                            const mkldnn::algorithm alg_kind) :
+                            alg_kind_(alg_kind),
+                            fwd_(nullptr), data_(nullptr), out_(nullptr) {
     Init(input, output,
          kernel_h, kernel_w, stride_h, stride_w,
          padding_t, padding_b, padding_l, padding_r);

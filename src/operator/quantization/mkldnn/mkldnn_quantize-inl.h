@@ -41,8 +41,8 @@ void MKLDNNQuantizeComputeKer(const std::vector<NDArray>& inputs,
   using namespace mxnet_op;
   using red::limits::MaxValue;
   using red::limits::MinValue;
-  float real_range;
-  float quantized_range;
+  float real_range = 0.0;
+  float quantized_range = 0.0;
   if (param.out_type == mshadow::kUint8) {
     real_range = MaxAbs(*inputs[1].data().dptr<float>(), *inputs[2].data().dptr<float>());
     quantized_range = MaxAbs(MaxValue<DstType>(), MinValue<DstType>());
@@ -93,7 +93,7 @@ void MKLDNNQuantizeCompute(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
   } else if (param.out_type == mshadow::kInt8) {
     MKLDNNQuantizeComputeKer<float, int8_t>(inputs, outputs, param, req);
   } else {
-    LOG(FATAL) << "quantize op only supports int8 and uint8 as output type";
+    LOG(FATAL) << "mkldnn quantize op only supports int8 and uint8 as output type";
   }
 }
 

@@ -43,19 +43,17 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
   using red::limits::MinValue;
   typedef int32_t SrcDType;
   typedef int8_t  DstDType;
-
   // check shapes
   size_t i_dim = inputs[0].ndim();
   size_t o_dim = outputs[0].ndim();
   CHECK_EQ(i_dim, o_dim);
-  int total_len = 1;
+  unsigned int total_len = 1;
   memory::dims tensor_shape;
   for (size_t i = 0; i < i_dim; ++i) {
     CHECK_EQ(inputs[0].size(i), outputs[0].size(i));
     total_len *= inputs[0].size(i);
   }
   tensor_shape.push_back(total_len);
-
   float first_quantized_range = MinAbs(MinValue<SrcDType>(),
                                        MaxValue<SrcDType>());
   float first_real_range = MaxAbs(*inputs[1].dptr<float>(),
@@ -66,13 +64,13 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
                                         MinValue<DstDType>());
   float second_scale = second_quantized_range / second_real_range;
   float scale = first_scale * second_scale;
-
+  *outputs[1].dptr<float>() = -second_real_range;
+  *outputs[2].dptr<float>() = second_real_range;
   primitive_attr attr;
   const int mask = 0;
   std::vector<float> scales = {scale};
   attr.set_output_scales(mask, scales);
   attr.set_int_output_round_mode(round_nearest);
-
   mkldnn::engine cpu_engine = mxnet::CpuEngine::Get()->get_engine();
   auto i_mpd = memory::primitive_desc({tensor_shape,
                                       (mkldnn::memory::data_type)data_type_enum<SrcDType>::type,
@@ -87,9 +85,6 @@ void MKLDNNRequantizeForwardKer(const nnvm::NodeAttrs& attrs,
   auto output = memory(o_mpd, outputs[0].dptr<DstDType>());
   auto r = reorder(reorder_pd, input, output);
   stream(stream::kind::lazy).submit({r}).wait();
-  //MKLDNNStream::Get()->Submit();
-  *outputs[1].dptr<float>() = -second_real_range;
-  *outputs[2].dptr<float>() = second_real_range;
 }
 
 void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
@@ -104,13 +99,11 @@ void MKLDNNRequantizeForward(const nnvm::NodeAttrs& attrs,
   Stream<cpu> *s = ctx.get_stream<cpu>();
   const RequantizeParam& param = nnvm::get<RequantizeParam>(attrs.parsed);
   float real_range;
-
   // model is calibrated
   if (param.min_calib_range.has_value() && param.max_calib_range.has_value()) {
     real_range =
           MaxAbs(param.min_calib_range.value(), param.max_calib_range.value());
     MKLDNNRequantizeForwardKer(attrs, ctx, inputs, req, outputs, real_range);
-
   // model is not calibrated
   } else {
     TShape src_shape, dst_shape;

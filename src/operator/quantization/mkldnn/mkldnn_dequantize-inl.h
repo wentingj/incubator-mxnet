@@ -86,7 +86,7 @@ void MKLDNNDequantizeCompute(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
   } else if (inputs[0].dtype() == mshadow::kInt8) {
     MKLDNNDequantizeComputeKer<int8_t, float>(inputs, outputs, req);
   } else {
-    LOG(FATAL) << "dequantize op only supports int8 and uint8 as input type";
+    LOG(FATAL) << "mkldnn dequantize op only supports int8 and uint8 as input type";
   }
 }
 

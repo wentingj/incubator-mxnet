@@ -172,10 +172,11 @@ static inline MKLDNNConvForward &GetConvFwd(
   return it->second;
 }
 
-void MKLDNNQuantizedConvForward(const nnvm::NodeAttrs& attrs, const OpContext &ctx,
-                               const std::vector<NDArray> &in_data,
-                               const std::vector<OpReqType> &req,
-                               const std::vector<NDArray> &out_data) {
+void MKLDNNQuantizedConvForward(const nnvm::NodeAttrs& attrs,
+                                const OpContext &ctx,
+                                const std::vector<NDArray> &in_data,
+                                const std::vector<OpReqType> &req,
+                                const std::vector<NDArray> &out_data) {
   if (in_data[0].dtype() == mshadow::kUint8) {
     TmpMemMgr::Get()->Init(ctx.requested[conv::kTempSpace]);
     const ConvolutionParam& param = nnvm::get<ConvolutionParam>(attrs.parsed);
