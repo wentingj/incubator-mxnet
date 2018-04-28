@@ -210,10 +210,10 @@ void MKLDNNBatchNormForward(const OpContext &ctx, const BatchNormParam &param,
                             const std::vector<NDArray>   &aux_states) {
   TmpMemMgr::Get()->Init(ctx.requested[batchnorm::kTempSpace]);
   unsigned flags      = _GetFlags(in_data, aux_states, param, ctx.is_train);
-  const NDArray &data = in_data[batchnorm::kData];
+  const NDArray &data = in_data[batchnorm::kData].Reorder2Default();
 
   auto &fwd = GetBNForward<DType>(param, ctx, data, flags);
-  const NDArray &out  = out_data[batchnorm::kOut];
+  const NDArray &out  = out_data[batchnorm::kOut].Reorder2Default();
 
   // for output memory
   auto out_mem = const_cast<NDArray &>(out).CreateMKLDNNData(fwd.GetPd().dst_primitive_desc());
@@ -230,6 +230,9 @@ void MKLDNNBatchNormForward(const OpContext &ctx, const BatchNormParam &param,
     DType* weight_buf = reinterpret_cast<DType *>(weight_mem.get_data_handle());
 
     nnvm::dim_t channels_ = data.shape()[1];
+    //std::cout << "param.size = " << param.axis << std::endl;
+    //std::cout << "channels = " << channels_ << std::endl;
+    //std::cout << "weight_mem_size = " << weight_mem.get_primitive_desc().get_size() << std::endl;
     CHECK(weight_mem.get_primitive_desc().get_size() == channels_ * sizeof(DType) * 2);
     DType* weight_ptr = gamma.data().dptr<DType>();
     DType* bias_ptr = beta.data().dptr<DType>();
