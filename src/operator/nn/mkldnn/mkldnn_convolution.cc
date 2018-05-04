@@ -41,6 +41,8 @@ bool SupportMKLDNNConv(const ConvolutionParam& params, const NDArray &input) {
 }
 
 static mkldnn::convolution_forward::primitive_desc GetConvFwdImpl(
+   const ConvolutionParam& param, bool is_train, const NDArray &data,
+   const NDArray &weights, const NDArray *bias, const NDArray &output) {
   auto prop = is_train ? mkldnn::prop_kind::forward_training : mkldnn::prop_kind::forward_scoring;
   auto data_md = GetMemDesc(data);
   auto weight_md = GetWeightDesc(weights, param.num_group);
